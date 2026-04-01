@@ -70,8 +70,12 @@ while true; do
 
    # Copy question files if needed
 if [[ "$rank" == "rank03" && "$level" == *"level1"* ]]; then
-    if [ -f "broken_gnl.c" ]; then
-        cp "broken_gnl.c" "$base_dir/../../rendu/${shuffled[$i]}/broken_gnl.c"
+    if [[ "${shuffled[$i]}" == "broken_gnl" ]]; then
+        if [ -f "broken_gnl.c" ]; then
+            cp "broken_gnl.c" "$base_dir/../../rendu/${shuffled[$i]}/broken_gnl.c"
+        fi
+    else
+        touch "$base_dir/../../rendu/${shuffled[$i]}/${shuffled[$i]}.c"
     fi
 elif [[ "$rank" == "rank04" && "$level" == *"level2"* ]]; then
     if [ -f "given.c" ]; then
