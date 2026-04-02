@@ -58,7 +58,7 @@ The main menu provides the following options:
 - **📋 3. Exam Rank 03**: Practice exercises for Rank 03 exam  
 - **📄 4. Exam Rank 04**: Practice exercises for Rank 04 exam
 - **📄 5. Exam Rank 05**: Practice exercises for Rank 05 exam
-- **⚙️ 6. Exam Rank 06**: Practice exercises for Rank 06 exam
+- **📄 6. Exam Rank 06**: Practice exercises for Rank 06 exam
 - **📁 7. Open Rendu Folder**: Access your submission workspace
 - **🔄 8. Update Shell**: Keep your exam shell up-to-date with latest features
 
