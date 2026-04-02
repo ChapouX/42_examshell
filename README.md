@@ -60,6 +60,7 @@ The main menu provides the following options:
 - **📄 5. Exam Rank 05**: Practice exercises for Rank 05 exam
 - **⚙️ 6. Exam Rank 06**: Practice exercises for Rank 06 exam
 - **📁 7. Open Rendu Folder**: Access your submission workspace
+- **🔄 8. Update Shell**: Keep your exam shell up-to-date with latest features
 
 ## 💡 How to Use
 
@@ -75,6 +76,25 @@ The shell automatically creates a `rendu` folder where you can:
 - Write your solutions
 - Test your code
 - Practice exam submissions
+
+## 🔄 Staying Up-to-Date
+
+The exam shell includes an automatic update mechanism:
+
+```bash
+# From the main menu, select option 8: Update Shell
+# Or manually run:
+bash update.sh
+```
+
+The update script will:
+- ✅ Check for latest changes from the repository
+- ✅ Display available updates before pulling
+- ✅ Download and apply all updates automatically
+- ✅ Update file permissions for test scripts
+- ✅ Return you to the main menu when complete
+
+Stay tuned for new exam ranks, improved testers, and additional features!
 
 ## 🎯 Target Audience
 
