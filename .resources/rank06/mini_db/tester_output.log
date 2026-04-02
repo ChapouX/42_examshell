@@ -1,0 +1,90 @@
+[0;34m🔍 Running tests for mini_db[0m
+==========================================
+
+[0;34m📦 Test 1: Checking compilation...[0m
+In file included from ../../../rendu/mini_db/mini_db.cpp:1:
+../../../rendu/mini_db/mini_db.hpp: In member function ‘int Server::handleMessage(int, std::string)’:
+../../../rendu/mini_db/mini_db.hpp:92:25: error: ‘auto’ changes meaning in C++11; please remove it [-Werror=c++11-compat]
+   92 |                         auto it = db.find(key);
+      |                         ^~~~
+      |                         ----
+../../../rendu/mini_db/mini_db.hpp:92:30: error: ‘it’ does not name a type; did you mean ‘int’?
+   92 |                         auto it = db.find(key);
+      |                              ^~
+      |                              int
+../../../rendu/mini_db/mini_db.hpp:93:28: error: ‘it’ was not declared in this scope; did you mean ‘int’?
+   93 |                         if(it == db.end()){
+      |                            ^~
+      |                            int
+../../../rendu/mini_db/mini_db.hpp:96:50: error: ‘it’ was not declared in this scope; did you mean ‘int’?
+   96 |                         std::string res = "0 " + it->second + '\n';
+      |                                                  ^~
+      |                                                  int
+../../../rendu/mini_db/mini_db.hpp:104:25: error: ‘auto’ changes meaning in C++11; please remove it [-Werror=c++11-compat]
+  104 |                         auto it = db.find(key);
+      |                         ^~~~
+      |                         ----
+../../../rendu/mini_db/mini_db.hpp:104:30: error: ‘it’ does not name a type; did you mean ‘int’?
+  104 |                         auto it = db.find(key);
+      |                              ^~
+      |                              int
+../../../rendu/mini_db/mini_db.hpp:105:28: error: ‘it’ was not declared in this scope; did you mean ‘int’?
+  105 |                         if(it == db.end()){
+      |                            ^~
+      |                            int
+../../../rendu/mini_db/mini_db.cpp: In function ‘void sigIntHandler(int)’:
+../../../rendu/mini_db/mini_db.cpp:14:28: error: no matching function for call to ‘std::basic_ofstream<char>::basic_ofstream(std::string&)’
+   14 |     std::ofstream file(path);
+      |                            ^
+In file included from ../../../rendu/mini_db/mini_db.hpp:9:
+/usr/include/c++/13/fstream:797:7: note: candidate: ‘std::basic_ofstream<_CharT, _Traits>::basic_ofstream(const char*, std::ios_base::openmode) [with _CharT = char; _Traits = std::char_traits<char>; std::ios_base::openmode = std::ios_base::openmode]’
+  797 |       basic_ofstream(const char* __s,
+      |       ^~~~~~~~~~~~~~
+/usr/include/c++/13/fstream:797:34: note:   no known conversion for argument 1 from ‘std::string’ {aka ‘std::__cxx11::basic_string<char>’} to ‘const char*’
+  797 |       basic_ofstream(const char* __s,
+      |                      ~~~~~~~~~~~~^~~
+/usr/include/c++/13/fstream:786:7: note: candidate: ‘std::basic_ofstream<_CharT, _Traits>::basic_ofstream() [with _CharT = char; _Traits = std::char_traits<char>]’
+  786 |       basic_ofstream(): __ostream_type(), _M_filebuf()
+      |       ^~~~~~~~~~~~~~
+/usr/include/c++/13/fstream:786:7: note:   candidate expects 0 arguments, 1 provided
+/usr/include/c++/13/fstream:760:11: note: candidate: ‘std::basic_ofstream<char>::basic_ofstream(const std::basic_ofstream<char>&)’
+  760 |     class basic_ofstream : public basic_ostream<_CharT,_Traits>
+      |           ^~~~~~~~~~~~~~
+/usr/include/c++/13/fstream:760:11: note:   no known conversion for argument 1 from ‘std::string’ {aka ‘std::__cxx11::basic_string<char>’} to ‘const std::basic_ofstream<char>&’
+../../../rendu/mini_db/mini_db.cpp:19:13: error: ‘auto’ changes meaning in C++11; please remove it [-Werror=c++11-compat]
+   19 |         for(auto it = db.begin(); it != db.end(); ++it){
+      |             ^~~~
+      |             ----
+../../../rendu/mini_db/mini_db.cpp:19:18: error: ‘it’ does not name a type; did you mean ‘int’?
+   19 |         for(auto it = db.begin(); it != db.end(); ++it){
+      |                  ^~
+      |                  int
+../../../rendu/mini_db/mini_db.cpp:19:34: error: expected ‘;’ before ‘it’
+   19 |         for(auto it = db.begin(); it != db.end(); ++it){
+      |                                  ^~~
+      |                                  ;
+../../../rendu/mini_db/mini_db.cpp:19:35: error: ‘it’ was not declared in this scope; did you mean ‘int’?
+   19 |         for(auto it = db.begin(); it != db.end(); ++it){
+      |                                   ^~
+      |                                   int
+../../../rendu/mini_db/mini_db.cpp: In function ‘void readDb()’:
+../../../rendu/mini_db/mini_db.cpp:30:28: error: no matching function for call to ‘std::basic_ifstream<char>::basic_ifstream(std::string&)’
+   30 |     std::ifstream file(path);
+      |                            ^
+/usr/include/c++/13/fstream:536:7: note: candidate: ‘std::basic_ifstream<_CharT, _Traits>::basic_ifstream(const char*, std::ios_base::openmode) [with _CharT = char; _Traits = std::char_traits<char>; std::ios_base::openmode = std::ios_base::openmode]’
+  536 |       basic_ifstream(const char* __s, ios_base::openmode __mode = ios_base::in)
+      |       ^~~~~~~~~~~~~~
+/usr/include/c++/13/fstream:536:34: note:   no known conversion for argument 1 from ‘std::string’ {aka ‘std::__cxx11::basic_string<char>’} to ‘const char*’
+  536 |       basic_ifstream(const char* __s, ios_base::openmode __mode = ios_base::in)
+      |                      ~~~~~~~~~~~~^~~
+/usr/include/c++/13/fstream:525:7: note: candidate: ‘std::basic_ifstream<_CharT, _Traits>::basic_ifstream() [with _CharT = char; _Traits = std::char_traits<char>]’
+  525 |       basic_ifstream() : __istream_type(), _M_filebuf()
+      |       ^~~~~~~~~~~~~~
+/usr/include/c++/13/fstream:525:7: note:   candidate expects 0 arguments, 1 provided
+/usr/include/c++/13/fstream:499:11: note: candidate: ‘std::basic_ifstream<char>::basic_ifstream(const std::basic_ifstream<char>&)’
+  499 |     class basic_ifstream : public basic_istream<_CharT, _Traits>
+      |           ^~~~~~~~~~~~~~
+/usr/include/c++/13/fstream:499:11: note:   no known conversion for argument 1 from ‘std::string’ {aka ‘std::__cxx11::basic_string<char>’} to ‘const std::basic_ifstream<char>&’
+cc1plus: all warnings being treated as errors
+[0;31m❌ Compilation failed![0m
+[1;33mPlease check your C++ syntax.[0m
