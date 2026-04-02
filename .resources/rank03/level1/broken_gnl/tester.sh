@@ -22,12 +22,12 @@ truncate -s 0 empty.txt
 
 # Create test program
 cat > test_main.c << 'EOF'
+#include "get_next_line.h"
 #include <stdio.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-#include "get_next_line.h"
 
 int main(int argc, char **argv)
 {
@@ -64,7 +64,8 @@ EOF
 
 # Test 1: Basic functionality
 echo "${BLUE}Testing basic functionality...${RESET}"
-gcc -Wall -Werror -Wextra -D BUFFER_SIZE=42 -o test_gnl test_main.c $rendu_dir/get_next_line.c 2>/dev/null
+c_files=$(find "$rendu_dir" -name "*.c" ! -name "broken_gnl.c")
+gcc -Wall -Werror -Wextra -D BUFFER_SIZE=42 -o test_gnl test_main.c $c_files 2>/dev/null
 if [ $? -ne 0 ]; then
     echo "$(tput setaf 1)$(tput bold)FAIL: Compilation error$(tput sgr 0)"
     rm -f test*.txt empty.txt test_main.c
