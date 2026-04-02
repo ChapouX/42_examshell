@@ -92,6 +92,9 @@ elif [[ "$rank" == "rank04" && "$level" == *"level2"* ]]; then
         cp "given.c" "$base_dir/../../rendu/${shuffled[$i]}/given.c"
     fi
     touch "$base_dir/../../rendu/${shuffled[$i]}/${shuffled[$i]}.c"
+    if [[ "${shuffled[$i]}" == "vbc" ]]; then
+        touch "$base_dir/../../rendu/${shuffled[$i]}/vbc.h"
+    fi
 else
     touch "$base_dir/../../rendu/${shuffled[$i]}/${shuffled[$i]}.c"
 fi
