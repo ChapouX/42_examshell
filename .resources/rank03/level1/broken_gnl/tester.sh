@@ -17,7 +17,7 @@ done
 echo -e "Line 1\nLine 2\nLine 3" > test1.txt
 echo -e "Single line" > test2.txt
 echo -e "Empty\n\nLines" > test3.txt
-echo -e "No newline at end" > test4.txt
+echo -n "No newline at end" > test4.txt
 truncate -s 0 empty.txt
 
 # Create test program
@@ -99,16 +99,30 @@ if ! grep -q "Total lines read: 3" output3.txt; then
     exit 1
 fi
 
-# Test 4: Empty file
+# Test 4: No newline at end
+echo "${BLUE}Testing no newline at end...${RESET}"
+timeout 2 ./test_gnl test4.txt > output4.txt 2>/dev/null
+if [ $? -eq 124 ]; then
+    echo "$(tput setaf 1)$(tput bold)FAIL: Infinite loop detected! (Timeout)$(tput sgr 0)"
+    rm -f test*.txt empty.txt test_main.c test_gnl output*.txt
+    exit 1
+fi
+if ! grep -q "Total lines read: 1" output4.txt; then
+    echo "$(tput setaf 1)$(tput bold)FAIL: No newline test failed$(tput sgr 0)"
+    rm -f test*.txt empty.txt test_main.c test_gnl output*.txt
+    exit 1
+fi
+
+# Test 5: Empty file
 echo "${BLUE}Testing empty file...${RESET}"
-./test_gnl empty.txt > output4.txt 2>/dev/null
-if ! grep -q "Total lines read: 0" output4.txt; then
+./test_gnl empty.txt > output5.txt 2>/dev/null
+if ! grep -q "Total lines read: 0" output5.txt; then
     echo "$(tput setaf 1)$(tput bold)FAIL: Empty file test failed$(tput sgr 0)"
     rm -f test*.txt empty.txt test_main.c test_gnl output*.txt
     exit 1
 fi
 
-# Test 5: Different buffer sizes
+# Test 6: Different buffer sizes
 echo "${BLUE}Testing different buffer sizes...${RESET}"
 gcc -Wall -Werror -Wextra -D BUFFER_SIZE=1 -o test_gnl_small test_main.c $rendu_dir/get_next_line.c 2>/dev/null
 ./test_gnl_small test1.txt > output5.txt 2>/dev/null
