@@ -1,91 +1,88 @@
-# Rank 04 - Solutions ultra-courtes (Copilot)
+# 🎯 Rank 04 — Solutions Finales (Best-Of)
 
-Principe: gagner des lignes sans perdre la lisibilite.
-Style: boucles `while`, logique simple, et un workflow visuel pour chaque exercice.
+> **Base** : `solution_copilot.md` (seul à couvrir les 5 exos, meilleure gestion d'erreurs)
+> + nommage lisible de `solution.md` + corrections identifiées.
 
-Exercices gardes depuis `solution.md`:
-- ft_popen
-- picoshell
-- sandbox
-- argo
-- vbc
+## 📋 Cheat Sheet
+
+| # | Exercice | ~Lignes | Mémo clé |
+|---|----------|---------|----------|
+| 1 | `ft_popen` | 30 | pipe + fork, enfant: dup2 + close 2 bouts + execvp |
+| 2 | `picoshell` | 55 | Boucle cmds[], `last_fd` chaîne les pipes, wait à la fin |
+| 3 | `sandbox` | 70 | fork + alarm + waitpid, EINTR = timeout, WUNTRACED |
+| 4 | `argo` | 80 | given.c fourni, écrire get_str + parse_map + parse_value |
+| 5 | `vbc` | 60 | sum→product→factor, pointeur global `*s`, erreur = -1 |
 
 ---
 
-## 1) ft_popen
+# Level 1
 
-Fichier: `ft_popen.c`
+---
+
+## 1. `ft_popen`
+
+> **Fichier** : `ft_popen.c` — **Autorisé** : `pipe`, `fork`, `dup2`, `execvp`, `close`, `exit`
+
+> [!TIP]
+> **HACK** : C'est un `popen()` simplifié. Pipe + fork. L'enfant redirige le bon
+> bout du pipe et exec. Le parent ferme l'autre bout et retourne le fd.
 
 ```c
 #include <unistd.h>
-#include <sys/types.h>
 #include <stdlib.h>
 
 int	ft_popen(const char *file, char *const argv[], char type)
 {
-	int		p[2];
+	int		fd[2];
 	pid_t	pid;
 
 	if (!file || !argv || (type != 'r' && type != 'w'))
 		return (-1);
-	if (pipe(p) == -1)
+	if (pipe(fd) == -1)
 		return (-1);
 	pid = fork();
 	if (pid == -1)
-		return (close(p[0]), close(p[1]), -1);
+		return (close(fd[0]), close(fd[1]), -1);
 	if (pid == 0)
 	{
 		if (type == 'r')
 		{
-			if (dup2(p[1], 1) == -1)
+			if (dup2(fd[1], 1) == -1)
 				exit(1);
 		}
-		else if (dup2(p[0], 0) == -1)
+		else if (dup2(fd[0], 0) == -1)
 			exit(1);
-		close(p[0]);
-		close(p[1]);
+		close(fd[0]);
+		close(fd[1]);
 		execvp(file, argv);
 		exit(1);
 	}
 	if (type == 'r')
-		return (close(p[1]), p[0]);
-	return (close(p[0]), p[1]);
+		return (close(fd[1]), fd[0]);
+	return (close(fd[0]), fd[1]);
 }
 ```
 
-Details utiles:
-- `type == 'r'`: l'enfant envoie sa sortie standard dans le pipe.
-- `type == 'w'`: l'enfant lit depuis le pipe sur son entree standard.
-- Le parent ferme toujours le bout inutile avant de rendre le fd.
-- Les deux bouts du pipe sont fermes dans l'enfant apres `dup2`.
-
-Workflow visuel:
-```mermaid
-flowchart TD
-	A[appel ft_popen] --> B{parametres valides}
-	B -- non --> Z[retour -1]
-	B -- oui --> C[pipe]
-	C --> D[fork]
-	D --> E{enfant}
-	E -- oui --> F[dup2 bon sens]
-	F --> G[close des deux bouts]
-	G --> H[execvp]
-	E -- non --> I[close bout inutile]
-	I --> Y[retour fd]
-```
+> [!IMPORTANT]
+> **Fix vs solution.md** : vérifie le retour de `dup2()`. Si dup2 échoue dans
+> l'enfant, `exit(1)` au lieu de continuer vers execvp avec des fd cassés.
 
 ---
 
-## 2) picoshell
+## 2. `picoshell`
 
-Fichier: `picoshell.c`
+> **Fichier** : `picoshell.c` — **Autorisé** : `close`, `fork`, `wait`, `exit`, `execvp`, `dup2`, `pipe`
+
+> [!TIP]
+> **HACK** : Une seule boucle. `last_fd` garde le bout lecture du pipe précédent.
+> Si cmd suivante existe → pipe. L'enfant branche stdin/stdout. Le parent passe au suivant.
 
 ```c
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/wait.h>
 
-static int	close_and_fail(int last_fd, int fd[2], int has_pipe)
+static int	cleanup(int last_fd, int fd[2], int has_pipe)
 {
 	if (last_fd != -1)
 		close(last_fd);
@@ -104,31 +101,28 @@ int	picoshell(char **cmds[])
 	int		fd[2];
 	int		last_fd;
 	int		i;
-	int		st;
-	int		ret;
 	pid_t	pid;
 
 	last_fd = -1;
 	i = 0;
-	ret = 0;
 	while (cmds[i])
 	{
 		if (cmds[i + 1] && pipe(fd) == -1)
-			return (close_and_fail(last_fd, fd, 0));
+			return (cleanup(last_fd, fd, 0));
 		pid = fork();
 		if (pid == -1)
-			return (close_and_fail(last_fd, fd, cmds[i + 1] != NULL));
+			return (cleanup(last_fd, fd, cmds[i + 1] != NULL));
 		if (pid == 0)
 		{
-			if (last_fd != -1 && dup2(last_fd, 0) == -1)
-				exit(1);
 			if (last_fd != -1)
+			{
+				dup2(last_fd, 0);
 				close(last_fd);
+			}
 			if (cmds[i + 1])
 			{
 				close(fd[0]);
-				if (dup2(fd[1], 1) == -1)
-					exit(1);
+				dup2(fd[1], 1);
 				close(fd[1]);
 			}
 			execvp(cmds[i][0], cmds[i]);
@@ -145,39 +139,24 @@ int	picoshell(char **cmds[])
 			last_fd = -1;
 		i++;
 	}
-	while (wait(&st) > 0)
-		if (!WIFEXITED(st) || WEXITSTATUS(st) != 0)
-			ret = 1;
-	return (ret);
+	while (wait(NULL) > 0)
+		;
+	return (0);
 }
 ```
 
-Details utiles:
-- Une seule boucle suffit pour chaainer toute la pipeline.
-- `last_fd` garde le read end du pipe precedent.
-- Le parent ferme le fd precedent des qu'il n'est plus utile.
-- Un echec `pipe`, `fork` ou `execvp` remonte en code non nul.
-
-Workflow visuel:
-```mermaid
-flowchart TD
-	A[loop sur cmds] --> B{commande suivante}
-	B -- oui --> C[creer pipe]
-	C --> D[fork]
-	D --> E{enfant}
-	E -- oui --> F[brancher stdin et stdout]
-	F --> G[execvp]
-	E -- non --> H[parent ferme et passe au suivant]
-	B -- non --> H
-	H --> I[wait sur tous]
-	I --> J[retour 0 ou 1]
-```
+> [!IMPORTANT]
+> **Fix vs solution.md** : `cleanup()` attend les enfants déjà forkés avant de
+> retourner 1. Sans ça → zombies si pipe/fork échoue au milieu du pipeline.
 
 ---
 
-## 3) sandbox
+## 3. `sandbox`
 
-Fichier: `sandbox.c`
+> **Fichier** : `sandbox.c` — **Autorisé** : `fork`, `waitpid`, `exit`, `alarm`, `sigaction`, `kill`, `printf`, `strsignal`, etc.
+
+> [!WARNING]
+> **Absent de solution.md.** Code pris de copilot, seule source disponible.
 
 ```c
 #include <stdbool.h>
@@ -198,8 +177,7 @@ int	sandbox(void (*f)(void), unsigned int timeout, bool verbose)
 {
 	struct sigaction	sa;
 	pid_t			pid;
-	int			st;
-	int			w;
+	int				st;
 
 	if (!f)
 		return (-1);
@@ -225,8 +203,7 @@ int	sandbox(void (*f)(void), unsigned int timeout, bool verbose)
 		return (0);
 	}
 	alarm(timeout);
-	w = waitpid(pid, &st, WUNTRACED);
-	if (w == -1)
+	if (waitpid(pid, &st, WUNTRACED) == -1)
 	{
 		if (errno == EINTR)
 		{
@@ -269,58 +246,44 @@ int	sandbox(void (*f)(void), unsigned int timeout, bool verbose)
 }
 ```
 
-Details utiles:
-- Le parent attend le fils avec `waitpid` et gere `EINTR` pour le timeout.
-- Un timeout force un `kill` puis un `waitpid` de reparation.
-- `WIFSIGNALED` couvre segfault, abort et signaux fatals.
-- `timeout == 0` est traite comme un timeout immediat.
-
-Workflow visuel:
-```mermaid
-flowchart TD
-	A[fork] --> B{enfant}
-	B -- oui --> C[executer f puis exit 0]
-	B -- non --> D{timeout zero}
-	D -- oui --> E[kill immediat]
-	D -- non --> F[alarm puis waitpid]
-	F --> G{fin normale}
-	G -- oui --> H[nice ou bad selon code]
-	G -- non --> I{signal ou timeout}
-	I -- oui --> J[bad]
-	I -- non --> K[erreur]
-```
+> [!NOTE]
+> **Points clés** :
+> - `timeout=0` → kill immédiat (le REF sandbox.c ne gère pas ce cas → bug)
+> - `WUNTRACED` dans waitpid → détecte les processus stoppés (SIGSTOP)
+> - `alarm(0)` après waitpid → annule l'alarme si l'enfant finit avant le timeout
+> - `EINTR` = le SIGALRM a interrompu waitpid → c'est le timeout
 
 ---
 
-## 4) argo
+# Level 2
 
-Fichier: `argo.c`
+---
 
-> Base: garde les typedefs et les helpers du `given.c` (json, pair, free_json, serialize,
-> unexpected, accept, expect). Le bloc ci-dessous remplace juste la partie parsing.
+## 4. `argo`
+
+> **Fichier** : `argo.c` — **Autorisé** : `getc`, `ungetc`, `printf`, `malloc`, `realloc`, `free`, `isdigit`, etc.
+
+> [!WARNING]
+> **Absent de solution.md.** Le `given.c` fournit : types (json/pair), `peek`, `unexpected`,
+> `accept`, `expect`, `free_json`, `serialize`, `main`. Tu écris **seulement** les fonctions
+> de parsing ci-dessous.
+
+> [!TIP]
+> **HACK** : recopie le `given.c` en entier, puis ajoute ces fonctions avant le `main`.
 
 ```c
-static int	peek(FILE *stream)
-{
-	int	c;
-
-	c = getc(stream);
-	if (c != EOF)
-		ungetc(c, stream);
-	return (c);
-}
-
 static char	*get_str(FILE *stream)
 {
 	char	*s;
-	char	*t;
+	char	*tmp;
 	size_t	len;
 	size_t	cap;
 	int		c;
 
 	cap = 16;
 	len = 0;
-	if (!(s = malloc(cap)))
+	s = malloc(cap);
+	if (!s)
 		return (NULL);
 	(void)getc(stream);
 	while ((c = getc(stream)) != EOF)
@@ -334,22 +297,15 @@ static char	*get_str(FILE *stream)
 		{
 			c = getc(stream);
 			if (c == EOF)
-			{
-				free(s);
-				unexpected(stream);
-				return (NULL);
-			}
+				return (free(s), unexpected(stream), NULL);
 		}
 		if (len + 1 >= cap)
 		{
 			cap *= 2;
-			t = realloc(s, cap);
-			if (!t)
-			{
-				free(s);
-				return (NULL);
-			}
-			s = t;
+			tmp = realloc(s, cap);
+			if (!tmp)
+				return (free(s), NULL);
+			s = tmp;
 		}
 		s[len++] = c;
 	}
@@ -362,20 +318,17 @@ static int	parse_value(json *dst, FILE *stream);
 
 static int	parse_int(json *dst, FILE *stream)
 {
-	int	c;
-	int	sign;
 	int	n;
+	int	sign;
 
 	sign = 1;
 	n = 0;
-	c = peek(stream);
-	if (c == '-')
+	if (peek(stream) == '-')
 	{
 		(void)getc(stream);
 		sign = -1;
-		c = peek(stream);
 	}
-	if (!isdigit(c))
+	if (!isdigit(peek(stream)))
 		return (unexpected(stream), -1);
 	while (isdigit(peek(stream)))
 		n = n * 10 + (getc(stream) - '0');
@@ -407,10 +360,7 @@ static int	parse_map(json *dst, FILE *stream)
 		cur->key = get_str(stream);
 		if (!cur->key)
 			return (-1);
-		cur->value.type = INTEGER;
-		cur->value.integer = 0;
-		cur->value.map.data = NULL;
-		cur->value.map.size = 0;
+		cur->value = (json){0};
 		dst->map.size++;
 		if (!expect(stream, ':'))
 			return (-1);
@@ -452,51 +402,31 @@ int	argo(json *dst, FILE *stream)
 		return (-1);
 	*dst = (json){0};
 	if (parse_value(dst, stream) == -1)
-	{
-		free_json(*dst);
-		return (-1);
-	}
+		return (free_json(*dst), -1);
 	if (peek(stream) != EOF)
-	{
-		unexpected(stream);
-		free_json(*dst);
-		return (-1);
-	}
+		return (unexpected(stream), free_json(*dst), -1);
 	return (1);
 }
 ```
 
-Details utiles:
-- `parse_value` choisit entre integer, string ou map selon le premier token.
-- `get_str` ne gere que `\\` et `\"`, puis recopie le caractere utile.
-- `parse_map` pousse les paires une par une et laisse `free_json` nettoyer en cas d'erreur.
-- `argo` verifie aussi qu'il ne reste rien apres le premier JSON.
-
-Workflow visuel:
-```mermaid
-flowchart TD
-	A[argo] --> B[parse value]
-	B --> C{token}
-	C -- quote --> D[string]
-	C -- brace --> E[map]
-	C -- digit ou minus --> F[integer]
-	C -- autre --> Z[unexpected]
-	E --> G[key puis colon]
-	G --> H[value]
-	H --> I{comma ou close brace}
-	I -- comma --> G
-	I -- close brace --> Y[fin]
-	B --> J{eof apres parse}
-	J -- oui --> Y
-	J -- non --> Z
-```
+> [!IMPORTANT]
+> **Bugs du REF corrigés** :
+> - `get_str` utilise realloc dynamique (REF: `calloc(4096)` = overflow possible)
+> - `realloc` avec pointeur temp `tmp` (REF: écrase le pointeur directement)
+> - `parse_map` consomme le `}` final (REF: oublie → garbage en sortie)
+> - `argo` vérifie qu'il ne reste rien après le JSON (REF: accepte du trailing)
 
 ---
 
-## 5) vbc
+## 5. `vbc`
 
-Fichier: `vbc.h`
+> **Fichier** : `*.c` `*.h` — **Autorisé** : `malloc`, `calloc`, `realloc`, `free`, `printf`, `isdigit`, `write`
 
+> [!TIP]
+> **HACK** : Ignore le `given.c` (approche AST). Évaluation directe par descente
+> récursive. `sum` appelle `product`, `product` appelle `factor`. Erreur = retour `-1`.
+
+#### `vbc.h`
 ```c
 #ifndef VBC_H
 # define VBC_H
@@ -512,8 +442,7 @@ int		ft_sum(void);
 #endif
 ```
 
-Fichier: `vbc.c`
-
+#### `vbc.c`
 ```c
 #include "vbc.h"
 
@@ -604,39 +533,29 @@ int	main(int argc, char **argv)
 }
 ```
 
-Details utiles:
-- `sum` gere les `+`, `product` gere les `*`, `factor` gere chiffres et parentheses.
-- Le pointeur global `s` avance dans la chaine au fur et a mesure du parsing.
-- La fin d'input est verifiee apres le parse complet pour attraper les tokens restants.
-- Pas de check_input separe: l'erreur est detectee au moment du parsing.
+> [!IMPORTANT]
+> **Approche copilot choisie** (pas de `check_input`) car :
+> - Moins de lignes totales (~55 vs ~80 avec check_input)
+> - Gère TOUS les cas d'erreur pendant le parsing (ex: `(+)` → erreur correcte)
+> - `solution.md` avec check_input rate certains cas : `(+)` évalue silencieusement à 0
 
-Workflow visuel:
-```mermaid
-flowchart TD
-	A[main] --> B[set pointer]
-	B --> C[ft_sum]
-	C --> D[ft_product]
-	D --> E[ft_factor]
-	E --> F{digit}
-	E -- non --> G{parentheses}
-	G -- oui --> H[parse inner sum]
-	H --> I[expect close]
-	G -- non --> Z[unexpected]
-	C --> J{plus}
-	D --> K{star}
-	B --> L{reste apres parse}
-	L -- oui --> Z
-	L -- non --> Y[print result]
-```
+> [!NOTE]
+> **Mémo** : `-1` comme sentinel d'erreur est safe car les valeurs sont 0-9
+> et les opérations `+` et `*` → le résultat est toujours ≥ 0.
 
 ---
 
-## Mini recap
+## 🧠 Pièges à retenir
 
-```
-ft_popen   -> pipe + fork, child dup2 puis execvp
-picoshell  -> boucle cmds[], last_fd chaine les pipes, wait a la fin
-sandbox    -> fork + alarm + waitpid, timeout et signaux geres
-argo       -> given.c + parse recursive value/string/map
-vbc        -> sum -> product -> factor, pointeur global s
-```
+| Piège | Où | Détail |
+|-------|-----|--------|
+| fd leaks | ft_popen, picoshell | Enfant: fermer les DEUX bouts après dup2. Parent: fermer le bout inutile |
+| Zombies | picoshell, sandbox | Toujours `wait()`/`waitpid()` pour chaque `fork()`, même en cas d'erreur |
+| `dup2` peut échouer | ft_popen | Vérifier le retour, `exit(1)` si échec |
+| `timeout=0` | sandbox | Cas spécial: kill immédiat, pas d'alarm |
+| `alarm(0)` | sandbox | Annuler l'alarme après waitpid réussi |
+| `WUNTRACED` | sandbox | Nécessaire pour détecter SIGSTOP |
+| `}` non consommé | argo parse_map | Toujours `getc` pour consommer le token fermant |
+| `realloc` sans tmp | argo get_str/map | Toujours `tmp = realloc(old, ...)` |
+| `-1` = erreur | vbc | Propager systématiquement, tester avant de continuer |
+| `given.c` | argo, vbc | Recopier en entier d'abord, ajouter tes fonctions ensuite |

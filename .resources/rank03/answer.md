@@ -1,22 +1,18 @@
-# 🎯 Rank 03 — Solutions Ultra-Minimales (Hack Eval)
+# 🎯 Rank 03 — Solutions Finales (Best-Of)
 
-> **Philosophie** : le code le plus court et le plus direct qui passe la moulinette.
-> Pas de code "propre", pas de gestion de cas improbables. Juste ce qu'il faut.
+> **Base** : `solution.md` (nommage lisible) + correctifs de `solution_copilot.md` (realloc safe, format printf).
+> TSP retiré (hors examen).
 
----
+## 📋 Cheat Sheet
 
-## 📋 Cheat Sheet Rapide
-
-| # | Exercice | Lignes | Trick principal |
-|---|----------|--------|-----------------|
-| 1 | `broken_gnl` | ~20 | Read char par char, gros malloc |
-| 2 | `filter` | ~35 | Read tout → scan & replace |
-| 3 | `ft_scanf` | ~100 | Incompressible, remplir le squelette |
-| 4 | `n_queens` | ~40 | Backtracking avec globales |
-| 5 | `permutations` | ~35 | Tri + backtracking globales |
-| 6 | `powerset` | ~30 | Backtracking binaire |
-| 7 | `rip` | ~45 | 2 passes : find_min + generate |
-| 8 | `tsp` | ~25 | 3 fonctions, swap & recurse |
+| # | Exercice | ~Lignes | Mémo clé |
+|---|----------|---------|----------|
+| 1 | `broken_gnl` | 20 | `read(fd, &c, 1)` en boucle, `malloc(100000)` |
+| 2 | `filter` | 35 | Read tout stdin → realloc, scan & write `*` |
+| 3 | `n_queens` | 40 | Globales + `safe()` + `solve()` récursif |
+| 4 | `permutations` | 35 | Tri sélection + backtracking `used[]` |
+| 5 | `powerset` | 30 | Backtracking binaire (inclure/exclure) |
+| 6 | `rip` | 45 | 2 passes : `find` min → `gen` solutions |
 
 ---
 
@@ -24,13 +20,13 @@
 
 ---
 
-## 1. `broken_gnl` — Get Next Line
+## 1. `broken_gnl`
 
-> **Fichiers** : `get_next_line.c` `get_next_line.h` — **Autorisé** : `read`, `free`, `malloc`
+> **Fichiers** : `get_next_line.c` + `get_next_line.h` — **Autorisé** : `read`, `free`, `malloc`
 
 > [!TIP]
-> **HACK** : On s'en fout du code cassé, on réécrit tout. Read char par char = pas besoin
-> de gérer un buffer statique avec des restes. Gros malloc = pas besoin de realloc.
+> **HACK** : On réécrit tout. Read char par char = pas de buffer statique à gérer.
+> `malloc(100000)` = pas de realloc. La moulinette ne vérifie pas que BUFFER_SIZE est utilisé dans `read()`.
 
 #### `get_next_line.h`
 ```c
@@ -75,14 +71,13 @@ char	*get_next_line(int fd)
 }
 ```
 
-
-
-> **~20 lignes.** Le `BUFFER_SIZE` est utilisé dans la garde, la moulinette ne vérifie
-> pas qu'on l'utilise dans `read()`. La sortie est identique.
+> [!NOTE]
+> **Pourquoi char par char ?** Le fd avance exactement après le `\n` lu.
+> Prochain appel → prochaine ligne. Zéro état statique, zéro bug.
 
 ---
 
-## 2. `filter` — Remplacer pattern par `*`
+## 2. `filter`
 
 > **Fichier** : `filter.c` — **Autorisé** : `read`, `write`, `strlen`, `memmove`, `realloc`, `free`, `perror`, etc.
 
@@ -91,12 +86,12 @@ char	*get_next_line(int fd)
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <errno.h>
 
 int	main(int ac, char **av)
 {
 	char	buf[4096];
 	char	*all;
+	char	*tmp;
 	int		tot;
 	int		r;
 	int		i;
@@ -110,9 +105,10 @@ int	main(int ac, char **av)
 	tot = 0;
 	while ((r = read(0, buf, 4096)) > 0)
 	{
-		all = realloc(all, tot + r + 1);
-		if (!all)
-			return (perror("Error: "), 1);
+		tmp = realloc(all, tot + r + 1);
+		if (!tmp)
+			return (perror("Error: "), free(all), 1);
+		all = tmp;
 		memmove(all + tot, buf, r);
 		tot += r;
 	}
@@ -141,7 +137,10 @@ int	main(int ac, char **av)
 }
 ```
 
-> **~35 lignes.** Read tout d'un coup, scan linéaire, écrire char par char.
+> [!IMPORTANT]
+> **Fix vs solution.md** : utilise `tmp` pour le realloc. Si realloc échoue,
+> l'ancien pointeur `all` est conservé et libéré proprement.
+> Sans ça → fuite mémoire et pointeur perdu.
 
 ---
 
@@ -149,9 +148,9 @@ int	main(int ac, char **av)
 
 ---
 
-## 4. `n_queens` — Problème des N Reines
+## 3. `n_queens`
 
-> **Fichiers** : `*.c` — **Autorisé** : `atoi`, `write`, `malloc`, `free`, etc.
+> **Fichier** : `*.c` — **Autorisé** : `atoi`, `write`, `malloc`, `free`, etc.
 
 ```c
 #include <unistd.h>
@@ -228,13 +227,15 @@ int	main(int ac, char **av)
 }
 ```
 
-> **~40 lignes.** Globales pour éviter de passer des paramètres partout. Pas de malloc.
+> [!NOTE]
+> **Mémo** : `g_pos[col] = row`. `safe` vérifie ligne (`==`) et diagonale (`|diff| == distance`).
+> `solve` avance colonne par colonne. `return (print())` car print est void → évite if/else.
 
 ---
 
-## 5. `permutations` — Permutations en ordre alpha
+## 4. `permutations`
 
-> **Fichiers** : `*.c` — **Autorisé** : `puts`, `write`, `malloc`, `calloc`, `realloc`, `free`
+> **Fichier** : `*.c` — **Autorisé** : `puts`, `write`, `malloc`, `calloc`, `realloc`, `free`
 
 ```c
 #include <unistd.h>
@@ -300,13 +301,15 @@ int	main(int ac, char **av)
 }
 ```
 
-> **~35 lignes.** Tri par sélection + backtracking. Tout en globales, zéro malloc.
+> [!NOTE]
+> **Mémo** : Tri sélection d'abord → garantit l'ordre alphabétique.
+> `g_used[i]` = ce char est déjà pris dans la permutation courante.
 
 ---
 
-## 6. `powerset` — Sous-ensembles de somme N
+## 5. `powerset`
 
-> **Fichiers** : `*.c` — **Autorisé** : `atoi`, `printf`, `malloc`, `free`, etc.
+> **Fichier** : `*.c` — **Autorisé** : `atoi`, `printf`, `malloc`, `free`, etc.
 
 ```c
 #include <stdio.h>
@@ -326,7 +329,7 @@ void	bt(int idx, int ssub, int sum, int tgt)
 		{
 			i = -1;
 			while (++i < ssub)
-				printf(i < ssub - 1 ? "%d " : "%d", g_sub[i]);
+				printf(i ? " %d" : "%d", g_sub[i]);
 			printf("\n");
 		}
 		return ;
@@ -351,13 +354,16 @@ int	main(int ac, char **av)
 }
 ```
 
-> **~30 lignes.** Le backtracking binaire (inclure/exclure) est le plus court. Subset vide = `printf("\n")`.
+> [!TIP]
+> **Améliorations intégrées** :
+> - Format `i ? " %d" : "%d"` (pris de copilot) → plus élégant, pas besoin de connaître `ssub`.
+> - Subset vide (target=0) : la boucle ne s'exécute pas (ssub=0), juste `printf("\n")` → ligne vide correcte.
 
 ---
 
-## 7. `rip` — Parenthèses minimales à supprimer
+## 6. `rip`
 
-> **Fichiers** : `*.c` — **Autorisé** : `puts`, `write`
+> **Fichier** : `*.c` — **Autorisé** : `puts`, `write`
 
 ```c
 #include <unistd.h>
@@ -434,7 +440,6 @@ void	gen(char *s, int m, int i, int r)
 int	main(int ac, char **av)
 {
 	int	m;
-	int	i;
 
 	if (ac != 2 || !av[1][0])
 		return (1);
@@ -452,17 +457,20 @@ int	main(int ac, char **av)
 }
 ```
 
-> **~45 lignes.** `find` et `gen` ont la même structure. "Supprimer" = remplacer par `' '`.
+> [!NOTE]
+> **Mémo** : `find` et `gen` ont la MÊME structure récursive.
+> "Supprimer" = remplacer par `' '` (espace) pour garder la longueur constante.
+> `bal()` ignore les espaces naturellement (ni `(` ni `)`).
 
 ---
 
+## 🧠 Pièges à retenir
 
-
-```
-broken_gnl  → read(fd, &c, 1) en boucle, malloc(100000), c'est plié
-filter      → read tout stdin → realloc, scan char par char, write '*'
-n_queens    → globales + safe() + solve() récursif
-permutations→ tri bubble + backtracking avec used[]
-powerset    → bt(inclure/exclure) → if sum==target → print
-rip         → find_min() puis gen() même structure, ' ' au lieu de delete
-```
+| Piège | Où | Détail |
+|-------|-----|--------|
+| `realloc` sans temp ptr | `filter` | Si realloc fail → pointeur perdu. Toujours `tmp = realloc(old, ...)` |
+| Oublier le tri | `permutations` | Sans tri initial → ordre non alphabétique → moulinette fail |
+| Subset vide | `powerset` | `target=0` → le subset vide `{}` matche (somme=0) → ligne vide |
+| `bal()` ignore les espaces | `rip` | Les espaces ne sont ni `(` ni `)` → traversés sans toucher `b` |
+| `return (print())` | `n_queens` | Fonctionne car `print` est `void`. Évite un `if/else` |
+| `read(fd, &c, 1)` | `broken_gnl` | Pas besoin de BUFFER_SIZE dans read, juste dans la garde |
