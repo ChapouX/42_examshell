@@ -75,6 +75,8 @@ char	*get_next_line(int fd)
 }
 ```
 
+
+
 > **~20 lignes.** Le `BUFFER_SIZE` est utilisé dans la garde, la moulinette ne vérifie
 > pas qu'on l'utilise dans `read()`. La sortie est identique.
 
@@ -219,7 +221,7 @@ int	main(int ac, char **av)
 	if (ac != 2)
 		return (1);
 	g_n = atoi(av[1]);
-	if (g_n <= 0)
+	if (g_n <= 0 || g_n > 100)
 		return (0);
 	solve(0);
 	return (0);
@@ -276,6 +278,8 @@ int	main(int ac, char **av)
 	g_len = 0;
 	while (av[1][g_len])
 	{
+		if (g_len >= 199)
+			return (1);
 		g_src[g_len] = av[1][g_len];
 		g_len++;
 	}
