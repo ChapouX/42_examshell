@@ -1,0 +1,10 @@
+[0;34m🔍 Running COMPREHENSIVE TESTING for bsq[0m
+==========================================
+
+[0;34m📦 Compiling reference solution...[0m
+temp_main.c: In function ‘main’:
+temp_main.c:13:20: error: implicit declaration of function ‘convert_file_pointer’ [-Werror=implicit-function-declaration]
+   13 |                 if(convert_file_pointer(argv[1]) == -1)
+      |                    ^~~~~~~~~~~~~~~~~~~~
+cc1: all warnings being treated as errors
+[0;31m❌ Reference compilation failed![0m
