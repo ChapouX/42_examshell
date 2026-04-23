@@ -51,7 +51,7 @@ char	*get_next_line(int fd)
 
 	if (fd < 0 || BUFFER_SIZE <= 0)
 		return (NULL);
-	line = malloc(100000);
+	line = malloc(1000000);
 	if (!line)
 		return (NULL);
 	i = 0;
