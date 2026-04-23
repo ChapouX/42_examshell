@@ -1,7 +1,7 @@
 # 🎯 Rank 04 — Solutions Finales (Best-Of)
 
-> **Base** : `solution_copilot.md` (meilleure gestion d'erreurs)
-> + nommage lisible de `solution.md` + corrections identifiées.
+> **Base** : version améliorée (meilleure gestion d'erreurs)
+> + nommage lisible + corrections identifiées.
 > Sandbox et argo retirés (hors examen).
 
 ## 📋 Cheat Sheet
@@ -65,6 +65,18 @@ int	ft_popen(const char *file, char *const argv[], char type)
 > [!IMPORTANT]
 > **Fix vs solution.md** : vérifie le retour de `dup2()`. Si dup2 échoue dans
 > l'enfant, `exit(1)` au lieu de continuer vers execvp avec des fd cassés.
+
+**Workflow pour s'en souvenir :**
+1. Vérifications (arguments nuls) puis création du `pipe(fd)`.
+2. `fork()` le processus. En cas d'erreur, ne pas oublier de fermer le pipe (`close(fd[0])`, `close(fd[1])`) avant de `return -1`.
+3. **Côté Enfant** (`pid == 0`) :
+   - Si `type == 'r'` (le parent veut lire) : l'enfant écrit. `dup2(fd[1], 1)`.
+   - Si `type == 'w'` (le parent veut écrire) : l'enfant lit. `dup2(fd[0], 0)`.
+   - Bien fermer les deux fd originaux du pipe : `close(fd[0]); close(fd[1]);`.
+   - Lancer l'exécution avec `execvp`. Si ca faillit, crash direct avec `exit(1)`.
+4. **Côté Parent** (`pid > 0`) :
+   - Si `type == 'r'` : le parent lit. Il ferme le bout écriture `close(fd[1])` et retourne `fd[0]`.
+   - Si `type == 'w'` : inverse.
 
 ---
 
@@ -147,6 +159,19 @@ int	picoshell(char **cmds[])
 > [!IMPORTANT]
 > **Fix vs solution.md** : `cleanup()` attend les enfants déjà forkés avant de
 > retourner 1. Sans ça → zombies si pipe/fork échoue au milieu du pipeline.
+
+**Workflow pour s'en souvenir :**
+1. On n'utilise qu'une seule boucle `while(cmds[i])` en gardant le pipe précédent de côté via la variable `last_fd` (initialisée à `-1`).
+2. À chaque tour : si une prochaine commande existe (`cmds[i+1]`), on crée un NOUVEAU `pipe(fd)`. Puis on `fork()`.
+3. **Côté enfant** (`pid == 0`) :
+   - On branche l'entrée (stdin) : Si on avait un `last_fd`, on le `dup2(last_fd, 0)` puis `close(last_fd)`.
+   - On branche la sortie (stdout) : S'il y a une commande suivante, on se branche sur l'entrée du NOUVEAU pipe avec `dup2(fd[1], 1)`, on ferme le bout de lecture `close(fd[0])` et le bout initial de sortie `close(fd[1])`.
+   - On exécute avec `execvp`, si ca rate => `exit(1)`.
+4. **Côté parent** :
+   - Très important : on ferme IMPERATIVEMENT l'ancien `last_fd` (pour ne pas bloquer les enfants).
+   - On ferme l'entrée écriture de notre nouveau pipe créé : `close(fd[1])`.
+   - On sauvegarde la lecture du nouveau pipe pour le prochain tour : `last_fd = fd[0]`.
+5. Quand la boucle est finie, appeller `wait` en boucle tant qu'il y a des enfants pour fermer le bal proprement.
 
 ---
 
@@ -270,7 +295,7 @@ int	main(int argc, char **argv)
 ```
 
 > [!IMPORTANT]
-> **Approche copilot choisie** (pas de `check_input`) car :
+> **Approche directe choisie** (pas de `check_input`) car :
 > - Moins de lignes totales (~55 vs ~80 avec check_input)
 > - Gère TOUS les cas d'erreur pendant le parsing (ex: `(+)` → erreur correcte)
 > - `solution.md` avec check_input rate certains cas : `(+)` évalue silencieusement à 0
@@ -278,6 +303,14 @@ int	main(int argc, char **argv)
 > [!NOTE]
 > **Mémo** : `-1` comme sentinel d'erreur est safe car les valeurs sont 0-9
 > et les opérations `+` et `*` → le résultat est toujours ≥ 0.
+
+**Workflow pour s'en souvenir :**
+1. Créer une variable globale `char *s` pour garder la trace de la position actuelle dans la string.
+2. Créer 3 fonctions imbriquées (Recursive Descent) qui retournent un int et renvoient `-1` en cas d'erreur (`unexpected`).
+   - `ft_factor()` gère les nombres et les blocs entre parenthèses. Vérifie `isdigit`. Si c'est '(', on avance `s++`, on appelle `ft_sum()`, et on vérifie fermement qu'il y a un ')'.
+   - `ft_product()` gère les multiplications `*`. Appelle `ft_factor()`, puis tant que `*s == '*'`, avance avec `s++`, appelle l'autre `ft_factor()` et multiplie.
+   - `ft_sum()` gère les additions `+`. Appelle `ft_product()`, puis tant que `*s == '+'`, avance avec `s++`, appelle l'autre `ft_product()` et additionne.
+3. Dans le `main`, si tout est bon, il faut qu'à la fin de `ft_sum`, il n'y ait plus aucun char (`if (*s)`).
 
 ---
 
