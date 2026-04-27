@@ -74,7 +74,7 @@ char	*get_next_line(int fd)
 
 **Workflow pour s'en souvenir :**
 1. Gérer les erreurs de base (`fd < 0` ou `BUFFER_SIZE <= 0`).
-2. Faire un gros `malloc(100000)` pour éviter les `realloc`.
+2. Faire un gros `malloc(1000000)` pour éviter les `realloc`.
 3. Lire caractère par caractère (`read(fd, &c, 1)`) dans une boucle.
 4. Stocker chaque caractère et s'arrêter si on rencontre un `\n`.
 5. Gérer les erreurs de lecture, ajouter le `\0` final et retourner.
