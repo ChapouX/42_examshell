@@ -45,9 +45,9 @@ char	*get_next_line(int fd);
 char	*get_next_line(int fd)
 {
 	char	*line;
-	char	c;
+	char	ch;
 	int		i;
-	int		r;
+	int		read_res;
 
 	if (fd < 0 || BUFFER_SIZE <= 0)
 		return (NULL);
@@ -55,13 +55,13 @@ char	*get_next_line(int fd)
 	if (!line)
 		return (NULL);
 	i = 0;
-	while ((r = read(fd, &c, 1)) > 0)
+	while ((read_res = read(fd, &ch, 1)) > 0)
 	{
-		line[i++] = c;
-		if (c == '\n')
+		line[i++] = ch;
+		if (ch == '\n')
 			break ;
 	}
-	if (r < 0 || i == 0)
+	if (read_res < 0 || i == 0)
 		return (free(line), NULL);
 	line[i] = '\0';
 	return (line);
@@ -75,7 +75,7 @@ char	*get_next_line(int fd)
 **Workflow pour s'en souvenir :**
 1. Gérer les erreurs de base (`fd < 0` ou `BUFFER_SIZE <= 0`).
 2. Faire un gros `malloc(1000000)` pour éviter les `realloc`.
-3. Lire caractère par caractère (`read(fd, &c, 1)`) dans une boucle.
+3. Lire caractère par caractère (`read(fd, &ch, 1)`) dans une boucle avec `pos`.
 4. Stocker chaque caractère et s'arrêter si on rencontre un `\n`.
 5. Gérer les erreurs de lecture, ajouter le `\0` final et retourner.
 
@@ -93,65 +93,78 @@ char	*get_next_line(int fd)
 
 int	main(int ac, char **av)
 {
-	char	buf[4096];
-	char	*all;
-	char	*tmp;
-	int		tot;
-	int		r;
-	int		i;
-	int		j;
-	int		tl;
+	char	chunk[4096];
+	char	*data = NULL;
+	char	*safe_ptr;
+	int		len = 0;
+	int		read_res;
+	int		pos;
+	int		match;
+	int		pat_len;
 
 	if (ac != 2 || !av[1][0])
 		return (1);
-	tl = strlen(av[1]);
-	all = NULL;
-	tot = 0;
-	while ((r = read(0, buf, 4096)) > 0)
+	pat_len = strlen(av[1]);
+	while ((read_res = read(0, chunk, 4096)) > 0)
 	{
-		tmp = realloc(all, tot + r + 1);
-		if (!tmp)
-			return (perror("Error: "), free(all), 1);
-		all = tmp;
-		memmove(all + tot, buf, r);
-		tot += r;
+		safe_ptr = realloc(data, len + read_res + 1);
+		if (!safe_ptr)
+			return (perror("Error: "), free(data), 1);
+		data = safe_ptr;
+		memmove(data + len, chunk, read_res);
+		len += read_res;
 	}
-	if (r < 0)
-		return (perror("Error: "), free(all), 1);
-	if (!all)
+	if (read_res < 0)
+		return (perror("Error: "), free(data), 1);
+	if (!data)
 		return (0);
-	all[tot] = '\0';
-	i = 0;
-	while (all[i])
+	data[len] = '\0';
+	pos = 0;
+	while (data[pos])
 	{
-		j = 0;
-		while (av[1][j] && all[i + j] == av[1][j])
-			j++;
-		if (j == tl)
+		match = 0;
+		while (av[1][match] && data[pos + match] == av[1][match])
+			match++;
+		if (match == pat_len)
 		{
-			j = -1;
-			while (++j < tl)
+			match = -1;
+			while (++match < pat_len)
 				write(1, "*", 1);
-			i += tl;
+			pos += pat_len;
 		}
 		else
-			write(1, &all[i++], 1);
+			write(1, &data[pos++], 1);
 	}
-	return (free(all), 0);
+	return (free(data), 0);
 }
 ```
 
+> [!TIP]
+> **Option Ninja (si `memmem` est autorisé)** :
+> Si `memmem` est dans la liste des fonctions autorisées, la recherche devient beaucoup plus courte :
+> ```c
+> char *ptr = data;
+> char *found;
+> while ((found = memmem(ptr, (data + len) - ptr, av[1], pat_len)))
+> {
+>     write(1, ptr, found - ptr);
+>     for (int k = 0; k < pat_len; k++) write(1, "*", 1);
+>     ptr = found + pat_len;
+> }
+> write(1, ptr, (data + len) - ptr);
+> ```
+
 > [!IMPORTANT]
-> **Fix vs solution.md** : utilise `tmp` pour le realloc. Si realloc échoue,
-> l'ancien pointeur `all` est conservé et libéré proprement.
+> **Fix vs solution.md** : utilise `safe_ptr` pour le realloc. Si realloc échoue,
+> l'ancien pointeur `data` est conservé et libéré proprement.
 > Sans ça → fuite mémoire et pointeur perdu.
 
 **Workflow pour s'en souvenir :**
-1. Lire tout `stdin` par blocs de 4096 octets avec `read()` et cumuler dans une grande chaîne `all` avec `realloc()` (sécurisé avec `tmp`).
-2. Parcourir la chaîne cumulée `all` caractère par caractère.
-3. À chaque position, vérifier avec une boucle imbriquée (`j`) si on correspond au pattern de l'argument.
-4. Si correspondance complète trouvée, imprimer la bonne quantité d'étoiles `*`, et avancer l'index extérieur (`i += tl`).
-5. Sinon, imprimer le caractère tel quel et avancer (`i++`).
+1. Lire tout `stdin` par blocs de 4096 octets avec `read()` et cumuler dans une grande chaîne `data` avec `realloc()` (sécurisé avec `safe_ptr`).
+2. Parcourir la chaîne cumulée `data` caractère par caractère avec `pos`.
+3. À chaque position, vérifier avec une boucle imbriquée (`match`) si on correspond au pattern de l'argument.
+4. Si correspondance complète trouvée, imprimer la bonne quantité d'étoiles `*`, et avancer l'index extérieur (`pos += pat_len`).
+5. Sinon, imprimer le caractère tel quel et avancer (`pos++`).
 
 ---
 
@@ -518,7 +531,7 @@ int	main(int ac, char **av)
 
 | Piège | Où | Détail |
 |-------|-----|--------|
-| `realloc` sans temp ptr | `filter` | Si realloc fail → pointeur perdu. Toujours `tmp = realloc(old, ...)` |
+| `realloc` sans temp ptr | `filter` | Si realloc fail → pointeur perdu. Toujours `safe_ptr = realloc(data, ...)` |
 | Oublier le tri | `permutations` | Sans tri initial → ordre non alphabétique → moulinette fail |
 | Subset vide | `powerset` | `target=0` → le subset vide `{}` matche (somme=0) → ligne vide |
 | `bal()` ignore les espaces | `rip` | Les espaces ne sont ni `(` ni `)` → traversés sans toucher `b` |
