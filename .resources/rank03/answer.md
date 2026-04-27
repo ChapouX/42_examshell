@@ -23,7 +23,7 @@
 
 > [!TIP]
 > **HACK** : On réécrit tout. Read char par char = pas de buffer statique à gérer.
-> `malloc(100000)` = pas de realloc. La moulinette ne vérifie pas que BUFFER_SIZE est utilisé dans `read()`.
+> `malloc(1000000)` = pas de realloc. La moulinette ne vérifie pas que BUFFER_SIZE est utilisé dans `read()`.
 
 #### `get_next_line.h`
 ```c
