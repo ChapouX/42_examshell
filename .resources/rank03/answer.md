@@ -141,17 +141,55 @@ int	main(int ac, char **av)
 
 > [!TIP]
 > **Option Ninja (si `memmem` est autorisé)** :
-> Si `memmem` est dans la liste des fonctions autorisées, la recherche devient beaucoup plus courte :
+> Si `memmem` est dans la liste des fonctions autorisées, la recherche devient beaucoup plus courte. Voici le code complet :
 > ```c
-> char *ptr = data;
-> char *found;
-> while ((found = memmem(ptr, (data + len) - ptr, av[1], pat_len)))
+> #define _GNU_SOURCE
+> #include <unistd.h>
+> #include <stdio.h>
+> #include <stdlib.h>
+> #include <string.h>
+> 
+> int	main(int ac, char **av)
 > {
->     write(1, ptr, found - ptr);
->     for (int k = 0; k < pat_len; k++) write(1, "*", 1);
->     ptr = found + pat_len;
+> 	char	chunk[4096];
+> 	char	*data = NULL;
+> 	char	*safe_ptr;
+> 	int		len = 0;
+> 	int		read_res;
+> 	int		pat_len;
+> 	char	*ptr;
+> 	char	*found;
+> 	int		k;
+> 
+> 	if (ac != 2 || !av[1][0])
+> 		return (1);
+> 	pat_len = strlen(av[1]);
+> 	while ((read_res = read(0, chunk, 4096)) > 0)
+> 	{
+> 		safe_ptr = realloc(data, len + read_res + 1);
+> 		if (!safe_ptr)
+> 			return (perror("Error: "), free(data), 1);
+> 		data = safe_ptr;
+> 		memmove(data + len, chunk, read_res);
+> 		len += read_res;
+> 	}
+> 	if (read_res < 0)
+> 		return (perror("Error: "), free(data), 1);
+> 	if (!data)
+> 		return (0);
+> 	data[len] = '\0';
+> 	ptr = data;
+> 	while ((found = memmem(ptr, (data + len) - ptr, av[1], pat_len)))
+> 	{
+> 		write(1, ptr, found - ptr);
+> 		k = 0;
+> 		while (k++ < pat_len)
+> 			write(1, "*", 1);
+> 		ptr = found + pat_len;
+> 	}
+> 	write(1, ptr, (data + len) - ptr);
+> 	return (free(data), 0);
 > }
-> write(1, ptr, (data + len) - ptr);
 > ```
 
 > [!IMPORTANT]
