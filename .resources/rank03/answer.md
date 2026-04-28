@@ -87,115 +87,52 @@ char	*get_next_line(int fd)
 
 ```c
 #include <unistd.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 int	main(int ac, char **av)
 {
-	char	chunk[4096];
-	char	*data = NULL;
-	char	*safe_ptr;
+	char	buf[4096];
+	char	*input = NULL;
+	char	*tmp;
 	int		len = 0;
-	int		read_res;
-	int		pos;
-	int		match;
-	int		pat_len;
+	int		n;
+	int		i;
+	int		plen;
 
 	if (ac != 2 || !av[1][0])
 		return (1);
-	pat_len = strlen(av[1]);
-	while ((read_res = read(0, chunk, 4096)) > 0)
+	plen = strlen(av[1]);
+	while ((n = read(0, buf, 4096)) > 0)
 	{
-		safe_ptr = realloc(data, len + read_res + 1);
-		if (!safe_ptr)
-			return (perror("Error: "), free(data), 1);
-		data = safe_ptr;
-		memmove(data + len, chunk, read_res);
-		len += read_res;
+		tmp = realloc(input, len + n + 1);
+		if (!tmp)
+			return (free(input), 1);
+		input = tmp;
+		memmove(input + len, buf, n);
+		len += n;
 	}
-	if (read_res < 0)
-		return (perror("Error: "), free(data), 1);
-	if (!data)
-		return (0);
-	data[len] = '\0';
-	pos = 0;
-	while (data[pos])
+	if (n < 0 || !input)
+		return (free(input), n < 0);
+	input[len] = '\0';
+	i = 0;
+	while (input[i])
 	{
-		match = 0;
-		while (av[1][match] && data[pos + match] == av[1][match])
-			match++;
-		if (match == pat_len)
+		n = 0;
+		while (av[1][n] && input[i + n] == av[1][n])
+			n++;
+		if (n == plen)
 		{
-			match = -1;
-			while (++match < pat_len)
+			while (n--)
 				write(1, "*", 1);
-			pos += pat_len;
+			i += plen;
 		}
 		else
-			write(1, &data[pos++], 1);
+			write(1, &input[i++], 1);
 	}
-	return (free(data), 0);
+	return (free(input), 0);
 }
 ```
-
-> [!TIP]
-> **Option Ninja (si `memmem` est autorisé)** :
-> Si `memmem` est dans la liste des fonctions autorisées, la recherche devient beaucoup plus courte. Voici le code complet :
-> ```c
-> #define _GNU_SOURCE
-> #include <unistd.h>
-> #include <stdio.h>
-> #include <stdlib.h>
-> #include <string.h>
-> 
-> int	main(int ac, char **av)
-> {
-> 	char	chunk[4096];
-> 	char	*data = NULL;
-> 	char	*safe_ptr;
-> 	int		len = 0;
-> 	int		read_res;
-> 	int		pat_len;
-> 	char	*ptr;
-> 	char	*found;
-> 	int		k;
-> 
-> 	if (ac != 2 || !av[1][0])
-> 		return (1);
-> 	pat_len = strlen(av[1]);
-> 	while ((read_res = read(0, chunk, 4096)) > 0)
-> 	{
-> 		safe_ptr = realloc(data, len + read_res + 1);
-> 		if (!safe_ptr)
-> 			return (perror("Error: "), free(data), 1);
-> 		data = safe_ptr;
-> 		memmove(data + len, chunk, read_res);
-> 		len += read_res;
-> 	}
-> 	if (read_res < 0)
-> 		return (perror("Error: "), free(data), 1);
-> 	if (!data)
-> 		return (0);
-> 	data[len] = '\0';
-> 	ptr = data;
-> 	while ((found = memmem(ptr, (data + len) - ptr, av[1], pat_len)))
-> 	{
-> 		write(1, ptr, found - ptr);
-> 		k = 0;
-> 		while (k++ < pat_len)
-> 			write(1, "*", 1);
-> 		ptr = found + pat_len;
-> 	}
-> 	write(1, ptr, (data + len) - ptr);
-> 	return (free(data), 0);
-> }
-> ```
-
-> [!IMPORTANT]
-> **Fix vs solution.md** : utilise `safe_ptr` pour le realloc. Si realloc échoue,
-> l'ancien pointeur `data` est conservé et libéré proprement.
-> Sans ça → fuite mémoire et pointeur perdu.
 
 **Workflow pour s'en souvenir :**
 1. Lire tout `stdin` par blocs de 4096 octets avec `read()` et cumuler dans une grande chaîne `data` avec `realloc()` (sécurisé avec `safe_ptr`).
