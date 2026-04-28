@@ -134,6 +134,65 @@ int	main(int ac, char **av)
 }
 ```
 
+> [!TIP]
+> **Option Ninja (si `memmem` est autorisé)** :
+> Si `memmem` est dans la liste des fonctions autorisées, la recherche devient beaucoup plus courte. Voici le code complet :
+
+```c
+#define _GNU_SOURCE
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int	main(int ac, char **av)
+{
+	char	read_buf[4096];
+	char	*input_buf = NULL;
+	char	*tmp_buf;
+	int		total_len = 0;
+	int		nread;
+	int		pattern_len;
+	char	*cur_ptr;
+	char	*match_ptr;
+	int		star_count;
+
+	if (ac != 2 || !av[1][0])
+		return (1);
+	pattern_len = strlen(av[1]);
+	while ((nread = read(0, read_buf, 4096)) > 0)
+	{
+		tmp_buf = realloc(input_buf, total_len + nread + 1);
+		if (!tmp_buf)
+			return (perror("Error: "), free(input_buf), 1);
+		input_buf = tmp_buf;
+		memmove(input_buf + total_len, read_buf, nread);
+		total_len += nread;
+	}
+	if (nread < 0)
+		return (perror("Error: "), free(input_buf), 1);
+	if (!input_buf)
+		return (0);
+	input_buf[total_len] = '\0';
+	cur_ptr = input_buf;
+	while ((match_ptr = memmem(cur_ptr, (input_buf + total_len) - cur_ptr, av[1], pattern_len)))
+	{
+		write(1, cur_ptr, match_ptr - cur_ptr);
+		star_count = 0;
+		while (star_count++ < pattern_len)
+			write(1, "*", 1);
+		cur_ptr = match_ptr + pattern_len;
+	}
+	write(1, cur_ptr, (input_buf + total_len) - cur_ptr);
+	return (free(input_buf), 0);
+}
+```
+
+> [!IMPORTANT]
+> **Fix vs solution.md** : utilise `safe_ptr` pour le realloc. Si realloc échoue,
+> l'ancien pointeur `data` est conservé et libéré proprement.
+> Sans ça → fuite mémoire et pointeur perdu.
+
 **Workflow pour s'en souvenir :**
 1. Lire tout `stdin` par blocs de 4096 octets avec `read()` et cumuler dans une grande chaîne `data` avec `realloc()` (sécurisé avec `safe_ptr`).
 2. Parcourir la chaîne cumulée `data` caractère par caractère avec `pos`.
