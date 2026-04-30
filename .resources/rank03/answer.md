@@ -67,6 +67,57 @@ char	*get_next_line(int fd)
 	return (line);
 }
 ```
+#### `get_next_line.c version propre avec malloc au fur et a mesure`
+```c
+#include "get_next_line.h"
+
+static char *append_char(char *line, char ch, int len)
+{
+    char    *tmp;
+    int     i;
+
+    tmp = malloc(len + 2);
+    if (!tmp)
+        return (free(line), NULL);
+    i = 0;
+    while (i < len)
+    {
+        tmp[i] = line[i];
+        i++;
+    }
+    tmp[len] = ch;
+    tmp[len + 1] = '\0';
+    free(line);
+    return (tmp);
+}
+
+char    *get_next_line(int fd)
+{
+    char    *line;
+    char    ch;
+    int     i;
+    int     n;
+
+    if (fd < 0 || BUFFER_SIZE <= 0)
+        return (NULL);
+    line = malloc(1);
+    if (!line)
+        return (NULL);
+    line[0] = '\0';
+    i = 0;
+    while ((n = read(fd, &ch, 1)) > 0)
+    {
+        line = append_char(line, ch, i++);
+        if (!line)
+            return (NULL);
+        if (ch == '\n')
+            break ;
+    }
+    if (n < 0 || i == 0)
+        return (free(line), NULL);
+    return (line);
+}
+```
 
 > [!NOTE]
 > **Pourquoi char par char ?** Le fd avance exactement après le `\n` lu.
@@ -83,122 +134,129 @@ char	*get_next_line(int fd)
 
 ## 2. `filter`
 
-> **Fichier** : `filter.c` — **Autorisé** : `read`, `write`, `strlen`, `memmove`, `realloc`, `free`, `perror`, etc.
+> **Fichier** : `filter.c` — **Autorisé** : `read`, `write`, `strlen`, `realloc`, `free`, `perror`
 
 ```c
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
-
-int	main(int ac, char **av)
-{
-	char	buf[4096];
-	char	*input = NULL;
-	char	*tmp;
-	int		len = 0;
-	int		n;
-	int		i;
-	int		plen;
-
-	if (ac != 2 || !av[1][0])
-		return (1);
-	plen = strlen(av[1]);
-	while ((n = read(0, buf, 4096)) > 0)
-	{
-		tmp = realloc(input, len + n + 1);
-		if (!tmp)
-			return (free(input), 1);
-		input = tmp;
-		memmove(input + len, buf, n);
-		len += n;
-	}
-	if (n < 0 || !input)
-		return (free(input), n < 0);
-	input[len] = '\0';
-	i = 0;
-	while (input[i])
-	{
-		n = 0;
-		while (av[1][n] && input[i + n] == av[1][n])
-			n++;
-		if (n == plen)
-		{
-			while (n--)
-				write(1, "*", 1);
-			i += plen;
-		}
-		else
-			write(1, &input[i++], 1);
-	}
-	return (free(input), 0);
-}
-```
-
-> [!TIP]
-> **Option Ninja (si `memmem` est autorisé)** :
-> Si `memmem` est dans la liste des fonctions autorisées, la recherche devient beaucoup plus courte. Voici le code complet :
-
-```c
-#define _GNU_SOURCE
-#include <unistd.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
-int	main(int ac, char **av)
+int is_match(char *buf_acc, char *pattern, int pattern_len)
 {
-	char	read_buf[4096];
-	char	*input_buf = NULL;
-	char	*tmp_buf;
-	int		total_len = 0;
-	int		nread;
-	int		pattern_len;
-	char	*cur_ptr;
-	char	*match_ptr;
-	int		star_count;
+    int i = 0; // index de comparaison
 
-	if (ac != 2 || !av[1][0])
-		return (1);
-	pattern_len = strlen(av[1]);
-	while ((nread = read(0, read_buf, 4096)) > 0)
-	{
-		tmp_buf = realloc(input_buf, total_len + nread + 1);
-		if (!tmp_buf)
-			return (perror("Error: "), free(input_buf), 1);
-		input_buf = tmp_buf;
-		memmove(input_buf + total_len, read_buf, nread);
-		total_len += nread;
-	}
-	if (nread < 0)
-		return (perror("Error: "), free(input_buf), 1);
-	if (!input_buf)
-		return (0);
-	input_buf[total_len] = '\0';
-	cur_ptr = input_buf;
-	while ((match_ptr = memmem(cur_ptr, (input_buf + total_len) - cur_ptr, av[1], pattern_len)))
-	{
-		write(1, cur_ptr, match_ptr - cur_ptr);
-		star_count = 0;
-		while (star_count++ < pattern_len)
-			write(1, "*", 1);
-		cur_ptr = match_ptr + pattern_len;
-	}
-	write(1, cur_ptr, (input_buf + total_len) - cur_ptr);
-	return (free(input_buf), 0);
+    while (i < pattern_len)
+    {
+        if (buf_acc[i] != pattern[i])
+            return 0;
+        i++;
+    }
+    return 1;
+}
+
+int main(int argc, char **argv)
+{
+    char *pattern = argv[1];        // le mot a remplacer
+    int pattern_len;                // longueur du pattern
+    int buf_size = 4096;            // taille du buffer de lecture
+    char *buf;                      // buffer de lecture
+    char *buf_acc;                  // buffer accumulateur (bytes en attente de traitement)
+    char *new_buf_acc;              // buf_acc temporaire pour le realloc
+    int buf_acc_len = 0;            // nombre de bytes dans le buffer accumulateur
+    int bytes_read;                 // bytes lus a chaque appel de read
+    int pos;                        // position courante dans le buffer accumulateur
+    int leftover;                   // bytes restants apres traitement
+    int copy;                       // index de copie buf -> buf_acc
+    int shift;                      // index de decalage du leftover
+    int star;                       // index d'ecriture des etoiles
+    int flush;                      // index de vidage final du buf_acc
+
+    if (argc != 2 || !argv[1][0])
+        return 1;
+
+    pattern_len = strlen(pattern);
+
+    buf = malloc(buf_size);
+    if (!buf) { fprintf(stderr, "Error: malloc failed\n"); return 1; }
+
+    buf_acc = malloc(pattern_len - 1 + buf_size);
+    if (!buf_acc) { fprintf(stderr, "Error: malloc failed\n"); return 1; }
+
+    while ((bytes_read = read(0, buf, buf_size)) > 0)
+    {
+        new_buf_acc = realloc(buf_acc, buf_acc_len + bytes_read + 1);
+        if (!new_buf_acc) { fprintf(stderr, "Error: realloc failed\n"); return 1; }
+        buf_acc = new_buf_acc;
+        copy = 0;
+        while (copy < bytes_read)
+        {
+            buf_acc[buf_acc_len + copy] = buf[copy];
+            copy++;
+        }
+        buf_acc_len += bytes_read;
+
+        pos = 0;
+        while (pos <= buf_acc_len - pattern_len)
+        {
+            if (is_match(buf_acc + pos, pattern, pattern_len))
+            {
+                star = 0;
+                while (star < pattern_len) { write(1, "*", 1); star++; }
+                pos += pattern_len;
+            }
+            else
+                write(1, &buf_acc[pos++], 1);
+        }
+        leftover = buf_acc_len - pos;
+        shift = 0;
+        while (shift < leftover)
+        {
+            buf_acc[shift] = buf_acc[pos + shift];
+            shift++;
+        }
+        buf_acc_len = leftover;
+    }
+    if (bytes_read < 0) { perror("Error"); return 1; }
+
+    flush = 0;
+    while (flush < buf_acc_len)
+        write(1, &buf_acc[flush++], 1);
+
+    free(buf);
+    free(buf_acc);
+    return 0;
 }
 ```
-
-> [!IMPORTANT]
-> **Fix vs solution.md** : utilise `safe_ptr` pour le realloc. Si realloc échoue,
-> l'ancien pointeur `data` est conservé et libéré proprement.
-> Sans ça → fuite mémoire et pointeur perdu.
 
 **Workflow pour s'en souvenir :**
-1. Lire tout `stdin` par blocs de 4096 octets avec `read()` et cumuler dans une grande chaîne `data` avec `realloc()` (sécurisé avec `safe_ptr`).
-2. Parcourir la chaîne cumulée `data` caractère par caractère avec `pos`.
-3. À chaque position, vérifier avec une boucle imbriquée (`match`) si on correspond au pattern de l'argument.
-4. Si correspondance complète trouvée, imprimer la bonne quantité d'étoiles `*`, et avancer l'index extérieur (`pos += pat_len`).
-5. Sinon, imprimer le caractère tel quel et avancer (`pos++`).
+1. Valider les arguments :
+	- argc != 2 ou argv[1] vide → return 1
+
+2. Allouer la mémoire :
+	- malloc pour buf et buf_acc → erreur → return 1
+
+3. Boucle de lecture (read depuis stdin) :
+	- bytes_read < 0 → perror + return 1
+	- bytes_read == 0 → EOF → aller au flush final
+
+4. Copier buf dans buf_acc
+	- realloc la buf_acc pour faire de la place
+	- boucle copy : buf_acc[buf_acc_len + copy] = buf[copy]
+
+5. Scanner la buf_acc (tant que pos <= buf_acc_len - pattern_len)
+	- is_match(buf_acc + pos, pattern) ?
+	- oui → écrire N étoiles, pos += pattern_len
+	- non → écrire buf_acc[pos], pos++
+
+6. Décaler le leftover
+	- les derniers bytes non traités (potentiel début de match) sont glissés au début de la buf_acc
+	- retourner à l'étape 3
+
+7. Flush final (après EOF)
+	- écrire les bytes restants dans la buf_acc (plus assez pour un match complet)
+
+8. return 0
 
 ---
 
