@@ -144,8 +144,9 @@ char    *get_next_line(int fd)
 
 int is_match(char *buf_acc, char *pattern, int pattern_len)
 {
-    int i = 0; // index de comparaison
-
+    int i;
+    
+    i = 0;
     while (i < pattern_len)
     {
         if (buf_acc[i] != pattern[i])
@@ -157,74 +158,75 @@ int is_match(char *buf_acc, char *pattern, int pattern_len)
 
 int main(int argc, char **argv)
 {
-    char *pattern = argv[1];        // le mot a remplacer
-    int pattern_len;                // longueur du pattern
-    int buf_size = 4096;            // taille du buffer de lecture
-    char *buf;                      // buffer de lecture
-    char *buf_acc;                  // buffer accumulateur (bytes en attente de traitement)
-    char *new_buf_acc;              // buf_acc temporaire pour le realloc
-    int buf_acc_len = 0;            // nombre de bytes dans le buffer accumulateur
-    int bytes_read;                 // bytes lus a chaque appel de read
-    int pos;                        // position courante dans le buffer accumulateur
-    int leftover;                   // bytes restants apres traitement
-    int copy;                       // index de copie buf -> buf_acc
-    int shift;                      // index de decalage du leftover
-    int star;                       // index d'ecriture des etoiles
-    int flush;                      // index de vidage final du buf_acc
+    char *pattern;
+    int pattern_len;
+    int buf_size;
+    char *buf;
+    int buf_len;
+    int bytes_read;
+    int pos;
+    int i;
+    int star;
 
     if (argc != 2 || !argv[1][0])
         return 1;
 
+    pattern = argv[1];
     pattern_len = strlen(pattern);
+    buf_size = 4096;
+    
+    buf = malloc(pattern_len - 1 + buf_size);
+    if (!buf)
+        return 1;
 
-    buf = malloc(buf_size);
-    if (!buf) { fprintf(stderr, "Error: malloc failed\n"); return 1; }
-
-    buf_acc = malloc(pattern_len - 1 + buf_size);
-    if (!buf_acc) { fprintf(stderr, "Error: malloc failed\n"); return 1; }
-
-    while ((bytes_read = read(0, buf, buf_size)) > 0)
+    buf_len = 0;
+    while ((bytes_read = read(0, buf + buf_len, buf_size)) > 0)
     {
-        new_buf_acc = realloc(buf_acc, buf_acc_len + bytes_read + 1);
-        if (!new_buf_acc) { fprintf(stderr, "Error: realloc failed\n"); return 1; }
-        buf_acc = new_buf_acc;
-        copy = 0;
-        while (copy < bytes_read)
-        {
-            buf_acc[buf_acc_len + copy] = buf[copy];
-            copy++;
-        }
-        buf_acc_len += bytes_read;
-
+        buf_len += bytes_read;
         pos = 0;
-        while (pos <= buf_acc_len - pattern_len)
+
+        while (pos <= buf_len - pattern_len)
         {
-            if (is_match(buf_acc + pos, pattern, pattern_len))
+            if (is_match(buf + pos, pattern, pattern_len))
             {
                 star = 0;
-                while (star < pattern_len) { write(1, "*", 1); star++; }
+                while (star < pattern_len)
+                {
+                    write(1, "*", 1);
+                    star++;
+                }
                 pos += pattern_len;
             }
             else
-                write(1, &buf_acc[pos++], 1);
+            {
+                write(1, &buf[pos], 1);
+                pos++;
+            }
         }
-        leftover = buf_acc_len - pos;
-        shift = 0;
-        while (shift < leftover)
-        {
-            buf_acc[shift] = buf_acc[pos + shift];
-            shift++;
-        }
-        buf_acc_len = leftover;
-    }
-    if (bytes_read < 0) { perror("Error"); return 1; }
 
-    flush = 0;
-    while (flush < buf_acc_len)
-        write(1, &buf_acc[flush++], 1);
+        buf_len -= pos;
+        i = 0;
+        while (i < buf_len)
+        {
+            buf[i] = buf[pos + i];
+            i++;
+        }
+    }
+
+    if (bytes_read < 0)
+    {
+        free(buf);
+        return 1;
+    }
+
+    i = 0;
+    while (i < buf_len)
+    {
+        write(1, &buf[i], 1);
+        i++;
+    }
 
     free(buf);
-    free(buf_acc);
     return 0;
 }
 ```
