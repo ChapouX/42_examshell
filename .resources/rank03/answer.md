@@ -142,92 +142,99 @@ char    *get_next_line(int fd)
 #include <string.h>
 #include <stdio.h>
 
-int is_match(char *buf_acc, char *pattern, int pattern_len)
+static int	is_match(char *s, char *p, int plen)
 {
-    int i;
-    
+    int	i;
+
     i = 0;
-    while (i < pattern_len)
+    while (i < plen)
     {
-        if (buf_acc[i] != pattern[i])
-            return 0;
+        if (s[i] != p[i])
+            return (0);
         i++;
     }
-    return 1;
+    return (1);
 }
 
-int main(int argc, char **argv)
+int	main(int argc, char **argv)
 {
-    char *pattern;
-    int pattern_len;
-    int buf_size;
-    char *buf;
-    int buf_len;
-    int bytes_read;
-    int pos;
-    int i;
-    int star;
+    char	*pattern;
+    int		plen;
+    char	*acc;
+    int		acc_len;
+    char	buf[4096];
+    int		br;
+    int		pos;
+    int		i;
+    char	*tmp;
 
     if (argc != 2 || !argv[1][0])
-        return 1;
-
+        return (1);
     pattern = argv[1];
-    pattern_len = strlen(pattern);
-    buf_size = 4096;
-    
-    buf = malloc(pattern_len - 1 + buf_size);
-    if (!buf)
-        return 1;
-
-    buf_len = 0;
-    while ((bytes_read = read(0, buf + buf_len, buf_size)) > 0)
+    plen = (int)strlen(pattern);
+    acc = NULL;
+    acc_len = 0;
+    while (1)
     {
-        buf_len += bytes_read;
-        pos = 0;
-
-        while (pos <= buf_len - pattern_len)
+        br = read(0, buf, sizeof(buf));
+        if (br < 0)
         {
-            if (is_match(buf + pos, pattern, pattern_len))
+            perror("Error");
+            free(acc);
+            return (1);
+        }
+        if (br == 0)
+            break ;
+        tmp = realloc(acc, acc_len + br);
+        if (!tmp)
+        {
+            perror("Error");
+            free(acc);
+            return (1);
+        }
+        acc = tmp;
+        i = 0;
+        while (i < br)
+        {
+            acc[acc_len + i] = buf[i];
+            i++;
+        }
+        acc_len += br;
+        pos = 0;
+        while (pos <= acc_len - plen)
+        {
+            if (is_match(acc + pos, pattern, plen))
             {
-                star = 0;
-                while (star < pattern_len)
+                i = 0;
+                while (i < plen)
                 {
                     write(1, "*", 1);
-                    star++;
+                    i++;
                 }
-                pos += pattern_len;
+                pos += plen;
             }
             else
             {
-                write(1, &buf[pos], 1);
+                write(1, acc + pos, 1);
                 pos++;
             }
         }
-
-        buf_len -= pos;
         i = 0;
-        while (i < buf_len)
+        while (pos + i < acc_len)
         {
-            buf[i] = buf[pos + i];
+            acc[i] = acc[pos + i];
             i++;
         }
+        acc_len = i;
     }
-
-    if (bytes_read < 0)
-    {
-        free(buf);
-        return 1;
-    }
-
     i = 0;
-    while (i < buf_len)
+    while (i < acc_len)
     {
-        write(1, &buf[i], 1);
+        write(1, acc + i, 1);
         i++;
     }
-
-    free(buf);
-    return 0;
+    free(acc);
+    return (0);
 }
 ```
 
