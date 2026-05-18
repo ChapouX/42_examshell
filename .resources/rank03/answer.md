@@ -5,7 +5,7 @@
 | # | Exercice | ~Lignes | Mémo clé |
 |---|----------|---------|----------|
 | 1 | `broken_gnl` | 69 | Cache `buf` + `pos`/`got` + `read(BUFFER_SIZE)` + `join()` |
-| 2 | `filter` | 69 | `chunk` → `mem` + scan `i`, `*`, décaler le suffixe (`same_prefix`) |
+| 2 | `filter` | 69 | `buf` → `acc` + scan `pos`, `*`, décaler le suffixe (`match`) |
 | 3 | `n_queens` | 40 | `g_n`, `g_row[]`, `safe(col,row)`, `putnbr` |
 | 4 | `permutations` | 35 | Tri + `g_in` / `g_out` / `g_used` + `perm(pos)` |
 | 5 | `powerset` | 30 | `g_val[]` / `g_cur[]` / `g_nb` + `bt(idx, cur_len, sum, goal)` |
@@ -143,7 +143,7 @@ char	*get_next_line(int fd)
 
 > **Fichier** : `filter.c` — **Autorisé** : `read`, `write`, `strlen`, `realloc`, `free`, `perror`
 >
-> Référence : `exam_training/.../filter/filter_bis.c` (même streaming ; ici `chunk` / `mem` / `same_prefix` pour la lisibilité).
+> Référence : `exam_training/.../filter/filter_bis.c` (même noms : `buf` / `acc` / `match`).
 
 ```c
 #include <unistd.h>
@@ -151,69 +151,69 @@ char	*get_next_line(int fd)
 #include <string.h>
 #include <stdio.h>
 
-/* Les m premiers octets de a sont-ils égaux au motif pat ? */
-static int	same_prefix(char *a, char *pat, int m)
+/* Les n premiers octets de s sont-ils égaux au motif p ? */
+static int	match(char *s, char *p, int n)
 {
-	int	k;
+	int	i;
 
-	k = 0;
-	while (k < m && a[k] == pat[k])
-		k++;
-	return (k == m);
+	i = 0;
+	while (i < n && s[i] == p[i])
+		i++;
+	return (i == n);
 }
 
 int	main(int ac, char **av)
 {
-	char	chunk[4096];	/* morceau lu sur stdin */
-	char	*mem;		/* tout ce qu’on n’a pas encore “consommé” */
-	char	*next;		/* résultat de realloc (toujours via pointeur tmp) */
-	int		n;		/* taille utile de mem */
-	int		m;		/* strlen(motif) */
-	int		r;		/* retour de read */
-	int		i;		/* index de scan dans mem */
-	int		k;		/* compteur / copie */
+	char	buf[4096];	/* morceau lu sur stdin */
+	char	*acc;		/* octets pas encore traités (accumulateur) */
+	char	*tmp;		/* résultat de realloc (ne jamais écraser acc direct) */
+	int		len;		/* taille utile de acc */
+	int		plen;		/* strlen(motif) */
+	int		br;		/* octets lus par read */
+	int		pos;		/* index de scan dans acc */
+	int		i;		/* boucles annexes (copie, étoiles, flush) */
 
 	if (ac != 2 || !av[1][0])
 		return (1);
-	m = strlen(av[1]);
-	mem = NULL;
-	n = 0;
-	while ((r = read(0, chunk, sizeof(chunk))) != 0)
+	plen = strlen(av[1]);
+	acc = NULL;
+	len = 0;
+	while ((br = read(0, buf, sizeof(buf))) != 0)
 	{
-		if (r < 0)
-			return (perror("Error"), free(mem), 1);
-		next = realloc(mem, n + r);
-		if (!next)
-			return (perror("Error"), free(mem), 1);
-		mem = next;
-		k = 0;
-		while (k < r)
-			mem[n++] = chunk[k++];
+		if (br < 0)
+			return (perror("Error"), free(acc), 1);
+		tmp = realloc(acc, len + br);
+		if (!tmp)
+			return (perror("Error"), free(acc), 1);
+		acc = tmp;
 		i = 0;
-		while (i <= n - m)
+		while (i < br)
+			acc[len++] = buf[i++];
+		pos = 0;
+		while (pos <= len - plen)
 		{
-			if (same_prefix(mem + i, av[1], m))
+			if (match(acc + pos, av[1], plen))
 			{
-				k = 0;
-				while (k++ < m)
+				i = 0;
+				while (i++ < plen)
 					write(1, "*", 1);
-				i += m;
+				pos += plen;
 			}
 			else
-				write(1, &mem[i++], 1);
+				write(1, &acc[pos++], 1);
 		}
-		k = 0;
-		while (i + k < n)
+		i = 0;
+		while (pos + i < len)
 		{
-			mem[k] = mem[i + k];
-			k++;
+			acc[i] = acc[pos + i];
+			i++;
 		}
-		n = k;
+		len = i;
 	}
-	k = 0;
-	while (k < n)
-		write(1, &mem[k++], 1);
-	return (free(mem), 0);
+	i = 0;
+	while (i < len)
+		write(1, &acc[i++], 1);
+	return (free(acc), 0);
 }
 ```
 
@@ -221,29 +221,29 @@ int	main(int ac, char **av)
 flowchart TD
     Start([Début]) --> V{argc == 2<br/>et argv1 non vide ?}
     V -->|non| R1[return 1]
-    V -->|oui| Init[mem = NULL, n = 0]
+    V -->|oui| Init[acc = NULL, len = 0]
 
-    Init --> Read[read stdin → chunk]
-    Read --> E{r < 0 ?}
-    E -->|oui| Err[perror + free mem → return 1]
-    E -->|non| Z{r == 0 ?}
-    Z -->|oui| Flush[écrire mem 0..n-1]
-    Z -->|non| Realloc[realloc mem + copier chunk]
+    Init --> Read[read stdin → buf]
+    Read --> E{br < 0 ?}
+    E -->|oui| Err[perror + free acc → return 1]
+    E -->|non| Z{br == 0 ?}
+    Z -->|oui| Flush[écrire acc 0..len-1]
+    Z -->|non| Realloc[realloc acc + copier buf]
 
     Realloc --> M{realloc OK ?}
     M -->|non| Err
-    M -->|oui| Scan[i = 0]
+    M -->|oui| Scan[pos = 0]
 
-    Scan --> S{i <= n - m ?}
-    S -->|non| Shift[décaler le suffixe au début de mem<br/>n = reste]
-    S -->|oui| Match{same_prefix mem+i ?}
-    Match -->|oui| Stars[écrire m × *<br/>i += m]
-    Match -->|non| Char[write mem i<br/>i++]
+    Scan --> S{pos <= len - plen ?}
+    S -->|non| Shift[décaler le suffixe au début de acc<br/>len = reste]
+    S -->|oui| Match{match acc+pos ?}
+    Match -->|oui| Stars[écrire plen × *<br/>pos += plen]
+    Match -->|non| Char[write acc pos<br/>pos++]
     Stars --> Scan
     Char --> Scan
 
     Shift --> Read
-    Flush --> Free[free mem]
+    Flush --> Free[free acc]
     Free --> R0[return 0]
 ```
 
@@ -251,23 +251,23 @@ flowchart TD
 1. Valider les arguments :
 	- `argc != 2` ou `argv[1]` vide → return 1
 
-2. Boucle `read` (tant que `r != 0`) :
-	- `r < 0` → `perror("Error")` + `free(mem)` → return 1
-	- `next = realloc(mem, n + r)` → erreur → idem
-	- copier `chunk` dans `mem`, `n += r`
+2. Boucle `read` (tant que `br != 0`) :
+	- `br < 0` → `perror("Error")` + `free(acc)` → return 1
+	- `tmp = realloc(acc, len + br)` → erreur → idem
+	- copier `buf` dans `acc`, `len += br`
 
-3. Scanner `mem` (tant que `i <= n - m`) :
-	- `same_prefix(mem + i, argv[1], m)` ?
-	- oui → écrire `m` × `*`, `i += m`
-	- non → `write(1, &mem[i++], 1)`
+3. Scanner `acc` (tant que `pos <= len - plen`) :
+	- `match(acc + pos, argv[1], plen)` ?
+	- oui → écrire `plen` × `*`, `pos += plen`
+	- non → `write(1, &acc[pos++], 1)`
 
 4. Décaler le suffixe :
-	- `mem[0..]` = `mem[i..n-1]` ; `n` = nombre d’octets restants
+	- `acc[0..]` = `acc[pos..len-1]` ; `len` = nombre d’octets restants
 	- retour à l'étape 2
 
-5. Après EOF : écrire `mem[0..n-1]` (suffixe trop court pour un match complet)
+5. Après EOF : écrire `acc[0..len-1]` (suffixe trop court pour un match complet)
 
-6. `free(mem)` → return 0
+6. `free(acc)` → return 0
 
 ---
 
@@ -645,9 +645,9 @@ int	main(int ac, char **av)
 
 | Piège | Où | Détail |
 |-------|-----|--------|
-| `realloc` sans temp ptr | `filter` | Si `realloc` échoue → perte du pointeur. Toujours `next = realloc(mem, ...)` puis tester `next` |
+| `realloc` sans temp ptr | `filter` | Si `realloc` échoue → perte du pointeur. Toujours `tmp = realloc(acc, ...)` puis tester `tmp` |
 | `perror("Error: ")` | `filter` | Souvent `Error: : msg` → utiliser `perror("Error")` |
-| Oublier le décalage suffixe | `filter` | Après le scan, garder dans `mem[0..n-1]` le début de match éventuel |
+| Oublier le décalage suffixe | `filter` | Après le scan, garder dans `acc[0..len-1]` le début de match éventuel |
 | `pos++` dans le return GNL | `broken_gnl` | Après `\n`, incrémenter `pos` pour ne pas le relire |
 | Oublier le tri | `permutations` | Sans tri sur `g_in` → ordre des lignes faux |
 | Subset vide | `powerset` | `goal == 0` → ligne vide (subset `{}`) |
