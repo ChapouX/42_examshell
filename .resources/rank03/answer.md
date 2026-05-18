@@ -238,6 +238,36 @@ int	main(int argc, char **argv)
 }
 ```
 
+```mermaid
+flowchart TD
+    Start([Début]) --> V{argc == 2<br/>et argv1 non vide ?}
+    V -->|non| R1[return 1]
+    V -->|oui| Init[acc = NULL, acc_len = 0]
+
+    Init --> Read[read stdin → buf]
+    Read --> E{br < 0 ?}
+    E -->|oui| Err[perror + free acc → return 1]
+    E -->|non| Z{br == 0 ?}
+    Z -->|oui| Flush[écrire acc 0..acc_len-1]
+    Z -->|non| Realloc[realloc acc + copier buf]
+
+    Realloc --> M{realloc OK ?}
+    M -->|non| Err
+    M -->|oui| Scan[pos = 0]
+
+    Scan --> S{pos <= acc_len - plen ?}
+    S -->|non| Shift[décaler leftover au début de acc<br/>acc_len = reste]
+    S -->|oui| Match{is_match acc+pos ?}
+    Match -->|oui| Stars[écrire plen × *<br/>pos += plen]
+    Match -->|non| Char[write acc pos<br/>pos++]
+    Stars --> Scan
+    Char --> Scan
+
+    Shift --> Read
+    Flush --> Free[free acc]
+    Free --> R0[return 0]
+```
+
 **Workflow pour s'en souvenir :**
 1. Valider les arguments :
 	- argc != 2 ou argv[1] vide → return 1

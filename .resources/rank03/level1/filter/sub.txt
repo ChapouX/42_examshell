@@ -1,6 +1,6 @@
 Assignment name: filter
 Expected files: filter.c
-Allowed functions: read, write, strlen, memmem, memmove, malloc, calloc,
+Allowed functions: read, write, strlen, malloc, calloc,
 realloc, free, printf, fprintf, stdout, stderr, perror
 --------------------------------------------------------------------------------
 
