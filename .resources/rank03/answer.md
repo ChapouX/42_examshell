@@ -48,94 +48,95 @@ char	*get_next_line(int fd);
 ```c
 #include "get_next_line.h"
 
-#if BUFFER_SIZE > 0
-# define GNL_BUF_SZ BUFFER_SIZE
-#else
-# define GNL_BUF_SZ 1
-#endif
-
-/* Colle la ligne déjà construite + n octets venant de chunk → une nouvelle chaîne. */
-static char	*join(char *line, char *chunk, ssize_t n)
+static char *join(char *line, char *buf, int n)
 {
-	char		*out;
-	ssize_t		old_len;
-	ssize_t		i;
-	ssize_t		j;
-
-	old_len = 0;
-	while (line && line[old_len])
-		old_len++;
-	out = malloc(old_len + n + 1);
+	char *out;
+	int i = 0;
+	int j = 0;
+	
+	while (line && line[i])
+		i++;
+	out = malloc(i + n + 1);
 	if (!out)
-		return (free(line), NULL);
-	j = 0;
-	while (j < old_len)
+		return(free(line), NULL);
+	while (j < i)
 	{
 		out[j] = line[j];
 		j++;
 	}
-	i = 0;
-	while (i < n)
+	j = 0;
+	while (j < n)
 	{
-		out[j + i] = chunk[i];
-		i++;
+		out[i + j] = buf[j];
+		j++;
 	}
-	out[j + i] = 0;
+	out[i + n] = '\0';
 	free(line);
 	return (out);
 }
 
-char	*get_next_line(int fd)
+char *get_next_line(int fd)
 {
-	static char		buf[GNL_BUF_SZ];
-	static ssize_t	pos;	/* index de lecture dans buf */
-	static ssize_t	got;	/* octets valides dans buf (dernier read) */
-	char			*line;
-	ssize_t		seg_start;
-	ssize_t		seg_len;
+	static char buf[BUFFER_SIZE];
+	char *line = NULL;
+	static int pos = 0;
+	static int got = 0;
+	int i = 0;
+	int b_read;
 
 	if (fd < 0 || BUFFER_SIZE <= 0)
 		return (NULL);
-	line = NULL;
 	while (1)
 	{
 		if (pos >= got)
 		{
-			got = read(fd, buf, BUFFER_SIZE);
+			b_read = read(fd, buf, BUFFER_SIZE);
+			if (b_read <= 0)
+			{
+				if (b_read < 0)
+				{
+					free(line);
+					return (NULL);
+				}
+				return (line);
+			}
+			got = (int)b_read;
 			pos = 0;
-			if (got <= 0)
-				break ;
 		}
-		seg_start = pos;
+		i = pos;
 		while (pos < got && buf[pos] != '\n')
 			pos++;
-		seg_len = pos - seg_start + (pos < got && buf[pos] == '\n');
-		if (seg_len)
+		if (pos > i)
 		{
-			line = join(line, buf + seg_start, seg_len);
+			line = join(line, buf + i, pos - i);
 			if (!line)
 				return (NULL);
 		}
 		if (pos < got && buf[pos] == '\n')
-			return (pos++, line);
+		{
+			line = join(line, "\n", 1);
+			if (!line)
+				return (NULL);
+			pos++;
+			break;
+		}
 	}
-	if (got < 0)
-		return (free(line), NULL);
 	return (line);
 }
 ```
 
 > [!NOTE]
-> **`join(line, chunk, n)`** : copie l’ancienne `line` + `n` octets de `chunk` en un seul `malloc`.
+> **`join(line, buf, n)`** : copie l’ancienne `line` + `n` octets de `buf` en un seul `malloc`.
 > **`buf` / `pos` / `got`** : cache de `read` — combien d’octets on a (`got`), où on en est (`pos`).
-> À chaque `\n` : `return (pos++, line)` pour ne pas relire le `\n` au prochain appel.
+> À chaque `\n` : `pos++`, puis `break` pour sortir de la boucle et `return (line)` juste après.
 
 **Workflow pour s'en souvenir :**
 1. `fd < 0` ou `BUFFER_SIZE <= 0` → `NULL`
-2. Si cache vide (`pos >= got`) → `got = read(fd, buf, BUFFER_SIZE)`, `pos = 0`
-3. Avancer `pos` jusqu’au `\n` (ou fin du chunk)
-4. `join(line, buf + seg_start, seg_len)` : ajouter le morceau (`seg_len` inclut le `\n` si présent)
-5. `\n` trouvé → `return` ; erreur `read` → `NULL` ; EOF sans octets → `NULL` ; EOF avec reste → return la ligne
+2. La boucle continue tant qu’il reste du cache ou qu’un `read()` ramène des octets
+3. Si cache vide (`pos >= got`) → `got = read(fd, buf, BUFFER_SIZE)`, `pos = 0`
+4. Avancer `pos` jusqu’au `\n` (ou fin du chunk)
+5. `join(line, buf + seg_start, seg_len)` : ajouter le morceau (`seg_len` inclut le `\n` si présent)
+6. `\n` trouvé → `break`, puis `return (line)` ; EOF sans octets → `NULL` ; EOF avec reste → return la ligne
 
 ---
 
@@ -151,7 +152,6 @@ char	*get_next_line(int fd)
 #include <string.h>
 #include <stdio.h>
 
-/* Les n premiers octets de s sont-ils égaux au motif p ? */
 static int	match(char *s, char *p, int n)
 {
 	int	i;
@@ -164,56 +164,62 @@ static int	match(char *s, char *p, int n)
 
 int	main(int ac, char **av)
 {
-	char	buf[4096];	/* morceau lu sur stdin */
-	char	*acc;		/* octets pas encore traités (accumulateur) */
-	char	*tmp;		/* résultat de realloc (ne jamais écraser acc direct) */
-	int		len;		/* taille utile de acc */
-	int		plen;		/* strlen(motif) */
-	int		br;		/* octets lus par read */
-	int		pos;		/* index de scan dans acc */
-	int		i;		/* boucles annexes (copie, étoiles, flush) */
+	char	buf[4096];
+	char	*acc;
+	char	*tmp;
+	int		pos;
+	int		b_read;
+	int		i;
+	int		p_len;
+	int		len;
 
 	if (ac != 2 || !av[1][0])
 		return (1);
-	plen = strlen(av[1]);
+	p_len = strlen(av[1]);
 	acc = NULL;
 	len = 0;
-	while ((br = read(0, buf, sizeof(buf))) != 0)
+	while ((b_read = read(0, buf, sizeof(buf))) != 0)
 	{
-		if (br < 0)
+		if (b_read < 0)
 			return (perror("Error"), free(acc), 1);
-		tmp = realloc(acc, len + br);
+		tmp = realloc(acc, len + b_read);
 		if (!tmp)
 			return (perror("Error"), free(acc), 1);
 		acc = tmp;
 		i = 0;
-		while (i < br)
-			acc[len++] = buf[i++];
-		pos = 0;
-		while (pos <= len - plen)
+		while (i < b_read)
 		{
-			if (match(acc + pos, av[1], plen))
-			{
-				i = 0;
-				while (i++ < plen)
-					write(1, "*", 1);
-				pos += plen;
-			}
-			else
-				write(1, &acc[pos++], 1);
-		}
-		i = 0;
-		while (pos + i < len)
-		{
-			acc[i] = acc[pos + i];
+			acc[len + i] = buf[i];
 			i++;
 		}
-		len = i;
+		len += b_read;
 	}
-	i = 0;
-	while (i < len)
-		write(1, &acc[i++], 1);
-	return (free(acc), 0);
+	pos = 0;
+	while (pos <= len - p_len)
+	{
+		if (match(acc + pos, av[1], p_len))
+		{
+			i = 0;
+			while (i < p_len)
+			{
+				write(1, "*", 1);
+				i++;
+			}
+			pos += p_len;
+		}
+		else
+		{
+			write(1, &acc[pos], 1);
+			pos++;
+		}
+	}
+	while (pos < len)
+	{
+		write(1, &acc[pos], 1);
+		pos++;
+	}
+	free(acc);
+	return (0);
 }
 ```
 
@@ -296,28 +302,28 @@ void	putnbr(int nb)
 	write(1, &c, 1);
 }
 
-void	print(void)
+void	print_solution(void)
 {
 	int	col;
 
-	col = -1;
-	while (++col < g_n)
+	col = 0;
+	while (col < g_n)
 	{
 		putnbr(g_row[col]);
 		if (col < g_n - 1)
 			write(1, " ", 1);
-		else
-			write(1, "\n", 1);
+		col++;
 	}
+	write(1, "\n", 1);
 }
 
-int	safe(int col, int row)
+int	is_safe(int col, int row)
 {
 	int	prev;
 	int	diff;
 
-	prev = -1;
-	while (++prev < col)
+	prev = 0;
+	while (prev < col)
 	{
 		if (g_row[prev] == row)
 			return (0);
@@ -326,6 +332,7 @@ int	safe(int col, int row)
 			diff = -diff;
 		if (diff == col - prev)
 			return (0);
+		prev++;
 	}
 	return (1);
 }
@@ -335,14 +342,20 @@ void	solve(int col)
 	int	row;
 
 	if (col == g_n)
-		return (print());
-	row = -1;
-	while (++row < g_n)
-		if (safe(col, row))
+	{
+		print_solution();
+		return ;
+	}
+	row = 0;
+	while (row < g_n)
+	{
+		if (is_safe(col, row))
 		{
 			g_row[col] = row;
 			solve(col + 1);
 		}
+		row++;
+	}
 }
 
 int	main(int ac, char **av)
@@ -395,8 +408,8 @@ void	perm(int pos)
 		write(1, "\n", 1);
 		return ;
 	}
-	i = -1;
-	while (++i < g_len)
+	i = 0;
+	while (i < g_len)
 	{
 		if (!g_used[i])
 		{
@@ -405,6 +418,7 @@ void	perm(int pos)
 			perm(pos + 1);
 			g_used[i] = 0;
 		}
+		i++;
 	}
 }
 
@@ -424,17 +438,21 @@ int	main(int ac, char **av)
 		g_in[g_len] = av[1][g_len];
 		g_len++;
 	}
-	i = -1;
-	while (++i < g_len - 1)
+	i = 0;
+	while (i < g_len - 1)
 	{
-		j = i;
-		while (++j < g_len)
+		j = i + 1;
+		while (j < g_len)
+		{
 			if (g_in[i] > g_in[j])
 			{
 				tmp = g_in[i];
 				g_in[i] = g_in[j];
 				g_in[j] = tmp;
 			}
+			j++;
+		}
+		i++;
 	}
 	perm(0);
 	return (0);
@@ -473,12 +491,13 @@ void	bt(int idx, int cur_len, int sum, int goal)
 	{
 		if (sum == goal)
 		{
-			i = -1;
-			while (++i < cur_len)
+			i = 0;
+			while (i < cur_len)
 			{
 				if (i > 0)
 					printf(" ");
 				printf("%d", g_cur[i]);
+				i++;
 			}
 			printf("\n");
 		}
@@ -496,9 +515,12 @@ int	main(int ac, char **av)
 	if (ac < 3)
 		return (0);
 	g_nb = ac - 2;
-	i = -1;
-	while (++i < g_nb)
+	i = 0;
+	while (i < g_nb)
+	{
 		g_val[i] = atoi(av[i + 2]);
+		i++;
+	}
 	bt(0, 0, 0, atoi(av[1]));
 	return (0);
 }
@@ -528,30 +550,35 @@ int	main(int ac, char **av)
 
 int	g_len;
 
-int	bal(char *s)
+int	is_balanced(char *s)
 {
 	int	depth;
 	int	i;
 
 	depth = 0;
-	i = -1;
-	while (s[++i])
+	i = 0;
+	while (s[i])
 	{
 		if (s[i] == '(')
 			depth++;
-		else if (s[i] == ')' && --depth < 0)
-			return (0);
+		else if (s[i] == ')')
+		{
+			depth--;
+			if (depth < 0)
+				return (0);
+		}
+		i++;
 	}
 	return (depth == 0);
 }
 
-void	find(char *s, int *best, int i, int removed)
+void	find_min(char *s, int *best, int i, int removed)
 {
 	char	saved;
 
 	if (removed > *best)
 		return ;
-	if (bal(s))
+	if (is_balanced(s))
 	{
 		if (removed < *best)
 			*best = removed;
@@ -563,20 +590,20 @@ void	find(char *s, int *best, int i, int removed)
 		{
 			saved = s[i];
 			s[i] = ' ';
-			find(s, best, i + 1, removed + 1);
+			find_min(s, best, i + 1, removed + 1);
 			s[i] = saved;
 		}
 		i++;
 	}
 }
 
-void	gen(char *s, int goal, int i, int removed)
+void	print_solutions(char *s, int goal, int i, int removed)
 {
 	char	saved;
 
 	if (removed > goal)
 		return ;
-	if (bal(s) && removed == goal)
+	if (is_balanced(s) && removed == goal)
 	{
 		write(1, s, g_len);
 		write(1, "\n", 1);
@@ -588,7 +615,7 @@ void	gen(char *s, int goal, int i, int removed)
 		{
 			saved = s[i];
 			s[i] = ' ';
-			gen(s, goal, i + 1, removed + 1);
+			print_solutions(s, goal, i + 1, removed + 1);
 			s[i] = saved;
 		}
 		i++;
@@ -609,8 +636,8 @@ int	main(int ac, char **av)
 		g_len++;
 	}
 	min = g_len;
-	find(av[1], &min, 0, 0);
-	gen(av[1], min, 0, 0);
+	find_min(av[1], &min, 0, 0);
+	print_solutions(av[1], min, 0, 0);
 	return (0);
 }
 ```
