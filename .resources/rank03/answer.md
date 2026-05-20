@@ -396,7 +396,7 @@ int	main(int ac, char **av)
 	int	i;
 
 	if (ac < 3)
-		return (0);
+		return (1);
 	g_nb = ac - 2;
 	i = 0;
 	while (i < g_nb)
